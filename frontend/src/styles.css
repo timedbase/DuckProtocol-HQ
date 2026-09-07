@@ -1,0 +1,39 @@
+:root {
+  /* DuckFun v2 palette -- mapped onto the existing variable names so every
+     page's var(--x) references re-theme automatically; only these
+     definitions and the three new tokens below actually changed. */
+  --paper: #171717;
+  --card: #1f1f1f;
+  --ink: #fafafa;
+  --line: #2e2e2e;
+  --soft: #252525;
+  --mute: #a0a0a0;
+  --lime: #a3e635;
+  --orange: #f5a623;
+  --pos: #a3e635;
+  --neg: #f0654a;
+  /* New in v2, no prior equivalent. */
+  --input: #383838;
+  --on: #141c06;
+  --acc: #4d7c0f;
+  --sh: 0 2px 4px rgba(0, 0, 0, .28);
+}
+html, body { margin: 0; padding: 0; background: var(--paper); }
+* { box-sizing: border-box; }
+body { font-family: 'Outfit', sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; text-wrap: pretty; }
+a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--soft); }
+a:hover { border-color: var(--lime); color: var(--lime); }
+::selection { background: var(--lime); color: var(--on); }
+input, button, textarea, select { font-family: inherit; color: inherit; }
+input:focus, textarea:focus, select:focus { outline: none; }
+input::placeholder, textarea::placeholder { color: var(--mute); }
+input, select, textarea { border-radius: 8px; }
+button { border-radius: 0; transition: background .14s ease, color .14s ease, border-color .14s ease; }
+.d-hover-line:hover { border-color: var(--mute) !important; }
+.d-hover-lime:hover { background: var(--lime) !important; color: var(--on) !important; }
+.d-hover-paper:hover { background: var(--soft) !important; }
+.d-lift { transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; }
+.d-lift:hover { transform: translateY(-3px); box-shadow: 0 16px 30px -20px rgba(0, 0, 0, .6); border-color: var(--acc) !important; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes popin { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes slidein { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }

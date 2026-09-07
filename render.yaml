@@ -1,0 +1,35 @@
+services:
+  # DuckProtocol's backend API -- single chain (Robinhood, chain id 4663),
+  # no self-hosted subgraph indexing needed here (unlike the legacy Ink/Arc
+  # launchpad's render.yaml): the duck-protocol-rh subgraph is deployed on
+  # Goldsky, which supports this chain natively.
+  - type: web
+    name: duckprotocol-hq-api
+    runtime: node
+    plan: starter
+    region: oregon
+    rootDir: backend
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm run api
+    envVars:
+      - key: ROBINHOOD_RPC_URL
+        sync: false
+      # Optional -- subgraph/client.js already defaults this to the
+      # "current" tag of the deployed duck-protocol-rh Goldsky subgraph, so
+      # a redeploy never needs this touched. Uncomment only to pin a
+      # specific version or point at a different indexer.
+      # - key: SUBGRAPH_URL
+      #   value: https://api.goldsky.com/api/public/project_cmhtxnzpqm81001w94ksmgira/subgraphs/duck-protocol-rh/current/gn
+      - key: PORT
+        value: "3000"
+      - key: PINATA_JWT
+        sync: false
+      # Backs persisted token comments/chat -- optional, missing it just
+      # leaves comments 503ing rather than taking the whole API down.
+      - key: DATABASE_URL
+        sync: false
+      # The platform's own $DUCK token address -- the only token the API
+      # ever marks `verified: true` on. Leave unset until $DUCK actually
+      # launches.
+      - key: DUCK_TOKEN_ADDRESS
+        sync: false
