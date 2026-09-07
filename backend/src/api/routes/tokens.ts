@@ -37,7 +37,7 @@ const TOKEN_FIELDS = `
   name symbol metaUri metaOverrideUri burnedSupply holderCount lastPrice lastTradeAt volumeAllTime
   virtualQuote migrationTarget migrated poolId bcTokensSold raisedQuote
   positionManager hook tokenId
-  campaign { id name symbol goal totalRaised deadline succeeded finalized }
+  campaign { id campaignId name symbol goal totalRaised deadline succeeded finalized }
 `;
 
 // "Last 24 hours from now" is a moving target TokenHourData's static hourly
@@ -249,7 +249,7 @@ export default function createTokensRouter(chain: ChainSlug) {
         `query TokenDetail($id: ID!) {
           token(id: $id) {
             ${TOKEN_FIELDS}
-            campaign { id creator name symbol dexQuoteAsset goal startTime deadline totalRaised succeeded finalized }
+            campaign { id campaignId creator name symbol dexQuoteAsset goal startTime deadline totalRaised succeeded finalized }
           }
           lppositions(where: { token: $id }, first: 1) {
             tokenId poolId hook positionManager blockNumber timestamp txHash

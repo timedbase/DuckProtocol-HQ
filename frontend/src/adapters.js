@@ -160,9 +160,19 @@ export function tokenToCoin(chain, t, i, meta) {
     id: t.id,
     address: t.id,
     family: t.family,
+    // The subgraph id (compound: "<crowdfund address>-<numeric id>") is what
+    // GET /campaigns/:id and portfolio contribution-matching key off of --
+    // kept as-is here. The on-chain calls (contribute/claim/refund/finalize)
+    // need the separate, real numeric campaignId field instead -- calling
+    // BigInt() on the compound string throws (this was the reported bug).
     campaignId: t.campaign?.id,
+    campaignOnChainId: t.campaign?.campaignId,
     campaignSucceeded: !!t.campaign?.succeeded,
-    campaignFailed: !!t.campaign?.failed,
+    // `failed` isn't a real Campaign field (only finalized/succeeded exist)
+    // -- derived the same way campaigns.ts/portfolio.ts already do. Without
+    // this, a genuinely failed (deadline passed, goal missed) campaign was
+    // never flagged as failed anywhere downstream (refund UI included).
+    campaignFailed: !!t.campaign?.finalized && !t.campaign?.succeeded,
     campaignDeadline: t.campaign?.deadline,
     campaignGoal: t.campaign?.goal,
     campaignRaised: t.campaign?.totalRaised,

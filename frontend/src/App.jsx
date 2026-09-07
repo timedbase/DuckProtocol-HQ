@@ -1030,19 +1030,19 @@ export default function App() {
     const dexQuoteAsset = coin.quoteTokenAddress || ZERO_ADDRESS;
     const decimals = decimalsFor(chain, dexQuoteAsset, [s.platformTokens.raise]);
     const amountWei = parseUnits(String(amt), decimals);
-    const hash = await runTx("Contribute", () => contributeCampaign(chain, { account, campaignId: BigInt(coin.campaignId), amount: amountWei, dexQuoteAsset }));
+    const hash = await runTx("Contribute", () => contributeCampaign(chain, { account, campaignId: BigInt(coin.campaignOnChainId), amount: amountWei, dexQuoteAsset }));
     if (hash) { await Promise.all([loadPortfolio(), loadCoins()]); flash(`Contributed ${amt} ${coin.quote}`); }
   }
   async function claimCampaignTokens(coin) {
-    const hash = await runTx("Claim", () => claimCampaign(chain, { account, campaignId: BigInt(coin.campaignId) }));
+    const hash = await runTx("Claim", () => claimCampaign(chain, { account, campaignId: BigInt(coin.campaignOnChainId) }));
     if (hash) { await loadPortfolio(); flash("Claimed."); }
   }
   async function claimCampaignRefundAction(coin) {
-    const hash = await runTx("Refund", () => claimCampaignRefund(chain, { account, campaignId: BigInt(coin.campaignId) }));
+    const hash = await runTx("Refund", () => claimCampaignRefund(chain, { account, campaignId: BigInt(coin.campaignOnChainId) }));
     if (hash) { await loadPortfolio(); flash("Refunded."); }
   }
   async function finalizeCampaignAction(coin) {
-    const hash = await runTx("Finalize", () => finalizeCampaign(chain, { account, campaignId: BigInt(coin.campaignId) }));
+    const hash = await runTx("Finalize", () => finalizeCampaign(chain, { account, campaignId: BigInt(coin.campaignOnChainId) }));
     if (hash) { await loadCoins(); flash("Finalized."); }
   }
   async function claimCreatorFees(tokenAddress) {
