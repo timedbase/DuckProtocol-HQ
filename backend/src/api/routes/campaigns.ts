@@ -2,17 +2,21 @@ import { Router } from "express";
 import { querySubgraph } from "../../subgraph/client.js";
 import type { ChainSlug } from "../../chain/registry.js";
 import { getUsdPrices, decimalsFor } from "../../chain/price.js";
-import { getPublicClient } from "../../chain/client.js";
-import { ADDRESSES } from "../../chain/addresses.js";
-import { DUCK_CROWDFUND_ABI } from "../../chain/abis.js";
 
 // `failed` isn't a real schema field (Campaign only tracks `finalized`/
 // `succeeded`) -- derived below as finalized && !succeeded instead of
 // querying a field that doesn't exist. `createdAt`/`resolvedAt`/
 // `resolvedAtBlock` aren't real fields either (Campaign only has
 // createdAtTimestamp) -- dropped rather than guessed at.
+// totalSupply/contributorBps/lpBps/hookFeeBps/vaultBps are set once at
+// launch() time and never re-emitted in any event, so the subgraph reads
+// them itself via a getCampaignMeta contract call inside its own
+// handleCampaignCreated (see DuckProtocol-RH/src/duck-crowdfund.ts) --
+// nullable there, since a reverted call at index time just leaves them
+// unset rather than a fabricated value.
 const CAMPAIGN_FIELDS = `
   id campaignId creator name symbol dexQuoteAsset goal startTime deadline totalRaised succeeded finalized
+  totalSupply contributorBps lpBps hookFeeBps vaultBps
   createdAt: createdAtTimestamp createdAtBlock createdAtTx
   token { id }
 `;
@@ -74,32 +78,6 @@ export default function createCampaignsRouter(chain: ChainSlug) {
       );
       if (data.campaign == null) return res.status(404).json({ error: "not found" });
       const [withUsd] = await attachCampaignUsd(chain, [data.campaign]);
-
-      // totalSupply/contributorBps aren't tracked by the subgraph at all --
-      // real on-chain-only figures, read live off DuckCrowdfund.getCampaignMeta
-      // (see DuckCrowdfund.sol's Campaign struct). Never fabricated: a failed
-      // read just omits them, matching every other "honest null" convention
-      // in this file, rather than guessing a supply split.
-      try {
-        const campaignId = BigInt((data.campaign as Record<string, unknown>).campaignId as string);
-        const meta = await getPublicClient(chain).readContract({
-          address: ADDRESSES[chain].DUCK_CROWDFUND,
-          abi: DUCK_CROWDFUND_ABI,
-          functionName: "getCampaignMeta",
-          args: [campaignId],
-        }) as readonly [string, string, string, `0x${string}`, bigint, bigint, bigint, number, bigint];
-        const [, , , , contributorBps, lpBps, hookFeeBps, vaultBps, totalSupply] = meta;
-        Object.assign(withUsd, {
-          totalSupply: totalSupply.toString(),
-          contributorBps: contributorBps.toString(),
-          lpBps: lpBps.toString(),
-          hookFeeBps: hookFeeBps.toString(),
-          vaultBps: String(vaultBps),
-        });
-      } catch (e) {
-        console.error("failed to read campaign meta on-chain", e);
-      }
-
       res.json(withUsd);
     } catch (err) {
       res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
