@@ -10,7 +10,7 @@ import CreateChooserPage from "./pages/CreateChooserPage.jsx";
 import CreateFormPage from "./pages/CreateFormPage.jsx";
 import CampaignPage from "./pages/CampaignPage.jsx";
 import PortfolioPage from "./pages/PortfolioPage.jsx";
-import { api, shortAddress, quoteSymbol, API_BASE, platformTokenAddress } from "./api.js";
+import { api, shortAddress, quoteSymbol, API_BASE } from "./api.js";
 import { tokenToCoin, tradeToRow, holderToRow, commentToRow, buildCandles, buildSparkline, buildTicks, labelFor, compactNumber, quoteAmount, usdOrQuote } from "./adapters.js";
 import { ageLabel } from "./data.js";
 import {
@@ -1368,18 +1368,17 @@ function buildViewModel(ctx) {
   const feed = list.slice().sort(sortMode.sort).map(shape);
 
   // Discover's hero slot is pinned to the platform's own token ("The Duck",
-  // $DUCK) -- not the highest-mcap community launch anymore.
-  // platformTokenAddress() resolves to chain.PLATFORM_TOKEN (still null for
-  // real until DUCK is actually live on-chain -- never fabricated) or, only
-  // in demo mode, a canned address so the hero card can be previewed ahead
-  // of the real launch. DiscoverPage renders a "not launched yet" hero card
-  // whenever this is null instead of hiding the slot entirely.
-  const duckAddr = platformTokenAddress(chain);
-  const duckCoin = duckAddr
-    ? s.coins.find((x) => x.id.toLowerCase() === duckAddr.toLowerCase())
-    : null;
+  // $DUCK) -- not the highest-mcap community launch. Found by the backend's
+  // own `verified` flag (gated server-side off DUCK_TOKEN_ADDRESS, see
+  // backend/.env.example), not chain.PLATFORM_TOKEN -- that was a separate,
+  // hand-maintained frontend constant that had no path to ever get set once
+  // the backend's own address was configured, so the hero card kept
+  // showing "not launched yet" even after $DUCK was real and verified.
+  // DiscoverPage renders that "not launched yet" card whenever this is
+  // null instead of hiding the slot entirely.
+  const duckCoin = s.coins.find((x) => x.verified);
   const kingCoin = duckCoin ? { ...shape(duckCoin), mcapLabel: usdOrQuote(duckCoin.mcUsd, duckCoin.mc, duckCoin.quote) } : null;
-  const duckLaunched = !!duckAddr;
+  const duckLaunched = !!duckCoin;
 
   const c = s.coins.find((x) => x.id === s.tokenId);
   const buying = s.side === "buy";

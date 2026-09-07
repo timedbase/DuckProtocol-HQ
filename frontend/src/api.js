@@ -6,15 +6,6 @@ import { CHAIN } from "./chain/addresses.js";
 
 export const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
-// Discover's hero slot is pinned to the platform's own token ($DUCK) --
-// chain.PLATFORM_TOKEN (see chain/addresses.js) stays null until it's
-// actually live on-chain. No real address configured yet correctly means
-// null here too (App.jsx renders the "not launched yet" state for that
-// case), never a fabricated address.
-export function platformTokenAddress(chain) {
-  return chain.PLATFORM_TOKEN || null;
-}
-
 function buildQuoteSymbols(chain) {
   const table = Object.fromEntries(chain.DEFAULT_QUOTE_TOKENS.map((t) => [t.address.toLowerCase(), t.symbol]));
   table["0x0000000000000000000000000000000000000000"] = chain.nativeSymbol;

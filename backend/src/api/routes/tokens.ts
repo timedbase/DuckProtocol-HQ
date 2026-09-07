@@ -2,6 +2,7 @@ import { Router } from "express";
 import { querySubgraph } from "../../subgraph/client.js";
 import type { ChainSlug } from "../../chain/registry.js";
 import { getUsdPrices, decimalsFor } from "../../chain/price.js";
+import { familyToFrontend, familyToSubgraph } from "../../chain/family.js";
 
 // The ONE token the API ever marks verified -- a deploy-time env var, not an
 // on-chain read or a curated list (see .env.example). Unset until $DUCK
@@ -9,6 +10,15 @@ import { getUsdPrices, decimalsFor } from "../../chain/price.js";
 const VERIFIED_ADDRESS = process.env.DUCK_TOKEN_ADDRESS?.toLowerCase() || null;
 function attachVerified<T extends { id: string }>(token: T): T & { verified: boolean } {
   return { ...token, verified: VERIFIED_ADDRESS != null && token.id.toLowerCase() === VERIFIED_ADDRESS };
+}
+
+// The subgraph's real TokenFamily enum is PascalCase (BondingCurve/Launcher/
+// Crowdfund) -- every frontend file expects CURVE/INSTANT/CAMPAIGN instead
+// (see chain/family.ts). Applied last, right before a token leaves this
+// route, so every other transform above still reads/writes the real
+// subgraph value.
+function applyFamily<T extends { family: string }>(token: T): T {
+  return { ...token, family: familyToFrontend(token.family) ?? token.family };
 }
 
 // lastPriceUsd/volumeAllTimeUsd/volumeUsd/closePriceUsd are deliberately NOT
@@ -195,13 +205,13 @@ export default function createTokensRouter(chain: ChainSlug) {
   const router = Router();
 
   router.get("/", async (req, res) => {
-    const family = typeof req.query.family === "string" ? req.query.family.toUpperCase() : undefined;
+    const family = typeof req.query.family === "string" ? familyToSubgraph(req.query.family.toUpperCase()) : undefined;
     const limit = Math.min(Number(req.query.limit ?? 50), 200);
     const offset = Number(req.query.offset ?? 0);
 
     try {
       const data = await querySubgraph<{
-        tokens: { id: string; quoteToken: string | null; lastPrice: string | null; volumeAllTime: string | null; metaUri: string | null; metaOverrideUri: string | null }[];
+        tokens: { id: string; family: string; quoteToken: string | null; lastPrice: string | null; volumeAllTime: string | null; metaUri: string | null; metaOverrideUri: string | null }[];
       }>(
         chain,
         `query Tokens($first: Int!, $skip: Int!, $where: Token_filter) {
@@ -211,7 +221,7 @@ export default function createTokensRouter(chain: ChainSlug) {
         }`,
         { first: limit, skip: offset, where: family ? { family } : {} }
       );
-      res.json((await attachImageUrls(await attachDerivedStats(chain, data.tokens))).map(attachVerified));
+      res.json((await attachImageUrls(await attachDerivedStats(chain, data.tokens))).map(attachVerified).map(applyFamily));
     } catch (err) {
       res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -253,12 +263,12 @@ export default function createTokensRouter(chain: ChainSlug) {
 
       if (data.token == null) return res.status(404).json({ error: "not found" });
       const [withStats] = await attachDerivedStats(chain, [
-        data.token as { id: string; quoteToken: string | null; lastPrice: string | null; volumeAllTime: string | null },
+        data.token as { id: string; family: string; quoteToken: string | null; lastPrice: string | null; volumeAllTime: string | null },
       ]);
       const [withImage] = await attachImageUrls([
         withStats as typeof withStats & { metaUri: string | null; metaOverrideUri: string | null },
       ]);
-      res.json({ ...attachVerified(withImage), position: data.lppositions[0] ?? null, pool: data.poolRegistrations[0] ?? null });
+      res.json({ ...applyFamily(attachVerified(withImage)), position: data.lppositions[0] ?? null, pool: data.poolRegistrations[0] ?? null });
     } catch (err) {
       res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
     }

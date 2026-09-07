@@ -95,13 +95,6 @@ export const CHAIN = {
   // fail closed; direct ERC20-denominated contribute/buy always works.
   NATIVE_EXTERNAL_ROUTE: null,
 
-  // The platform's own token ("The Duck", $DUCK) -- launched through
-  // DuckLauncher like any other token once it exists, but pinned as
-  // Discover's permanent hero slot instead of being ranked in with user
-  // launches by market cap. null until it's actually live on-chain; never
-  // fabricate an address here -- fill this in with the real deployed
-  // address the moment it launches.
-  PLATFORM_TOKEN: null,
 };
 
 // Bonding curve and crowdfund stay curated (owner-controlled allow-list,

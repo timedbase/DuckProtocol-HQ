@@ -149,11 +149,12 @@ function TheDuckCard({ v }) {
   );
 }
 
-// Before $DUCK actually launches on-chain (chain.PLATFORM_TOKEN is still
-// null -- see chain/addresses.js), the hero slot stays put rather than
-// disappearing: same visual language, honest "not launched yet" state
-// instead of stats that don't exist yet, and no click-through since there's
-// no token page to open.
+// Before $DUCK actually launches on-chain (no verified token in v.coins
+// yet -- see the backend's DUCK_TOKEN_ADDRESS env var and App.jsx's
+// duckCoin lookup), the hero slot stays put rather than disappearing: same
+// visual language, honest "not launched yet" state instead of stats that
+// don't exist yet, and no click-through since there's no token page to
+// open.
 function DuckComingSoonCard({ v }) {
   return (
     <div className="d-lift" style={cs("position:relative;flex:1;min-width:300px;display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:radial-gradient(120% 140% at 0% 0%,rgba(163,230,53,.13),transparent 60%),var(--card);box-shadow:var(--sh)")}>
