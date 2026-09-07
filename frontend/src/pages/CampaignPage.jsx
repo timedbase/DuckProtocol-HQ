@@ -1,6 +1,28 @@
+import { useEffect, useState } from "react";
 import { cs } from "../cs.js";
 import Thumb from "../Thumb.jsx";
 import { AddressChip, LinkChip } from "../MetaChips.jsx";
+
+function formatCountdown(ms) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const d = Math.floor(totalSec / 86400);
+  const h = Math.floor((totalSec % 86400) / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const sec = totalSec % 60;
+  const pad = (n) => String(n).padStart(2, "0");
+  return d > 0 ? `${d}d ${pad(h)}:${pad(m)}:${pad(sec)}` : `${pad(h)}:${pad(m)}:${pad(sec)}`;
+}
+
+function Countdown({ deadlineMs }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const remaining = deadlineMs - now;
+  if (remaining <= 0) return <span>DEADLINE PASSED</span>;
+  return <span>ENDS IN {formatCountdown(remaining)}</span>;
+}
 
 export default function CampaignPage({ v }) {
   const camp = v.camp;
@@ -41,7 +63,7 @@ export default function CampaignPage({ v }) {
               <div style={cs("display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-family:'JetBrains Mono',monospace;font-size:12.5px;margin-top:11px")}>
                 <span style={cs("font-weight:500")}>{camp.raised} / {camp.goal} {camp.quoteSymbol}</span>
                 <span style={cs("color:var(--mute)")}>{camp.backers} BACKERS</span>
-                <span style={cs(`color:${camp.deadlineC}`)}>{camp.deadline}</span>
+                <span style={cs(`color:${camp.deadlineC}`)}>{camp.isRaising ? <Countdown deadlineMs={camp.deadlineMs} /> : camp.deadline}</span>
               </div>
             </div>
 
@@ -84,10 +106,15 @@ export default function CampaignPage({ v }) {
             </div>
             <div style={cs("padding:18px")}>
               {camp.canContribute && (
-                <div style={cs("display:flex;align-items:stretch;border:1px solid var(--line);border-radius:9px;background:var(--paper);margin-bottom:16px;overflow:hidden")}>
-                  <input value={v.contribAmount} onChange={v.setContrib} style={cs("flex:1;min-width:0;border:0;outline:0;background:transparent;font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:500;letter-spacing:-.03em;padding:13px 14px")} />
-                  <span style={cs("padding:0 14px;border-left:1px solid var(--line);display:flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:13px")}>{camp.quoteSymbol}</span>
-                </div>
+                <>
+                  <div style={cs("display:flex;justify-content:flex-end;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--mute);margin-bottom:6px")}>
+                    BAL {camp.contribBalance} {camp.contribAsset}
+                  </div>
+                  <div style={cs("display:flex;align-items:stretch;border:1px solid var(--line);border-radius:9px;background:var(--paper);margin-bottom:16px;overflow:hidden")}>
+                    <input value={v.contribAmount} onChange={v.setContrib} style={cs("flex:1;min-width:0;border:0;outline:0;background:transparent;font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:500;letter-spacing:-.03em;padding:13px 14px")} />
+                    <span style={cs("padding:0 14px;border-left:1px solid var(--line);display:flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:13px")}>{camp.quoteSymbol}</span>
+                  </div>
+                </>
               )}
               <button onClick={v.submitCampaignAction} disabled={v.txPending} style={cs(`width:100%;padding:16px;border:1px solid var(--line);border-radius:6px;background:${camp.ctaBg};color:${camp.ctaFg};font-size:15.5px;font-weight:700;cursor:pointer`)}>{v.txPending ? "Confirming…" : camp.cta}</button>
               <div style={cs("font-size:12px;color:var(--mute);line-height:1.55;margin-top:14px")}>{camp.ctaNote}</div>

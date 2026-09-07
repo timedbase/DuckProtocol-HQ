@@ -1089,7 +1089,7 @@ export default function App() {
   }, [s.screen, s.tab, s.tokenId]);
 
   useEffect(() => {
-    if (s.screen === "token" && selectedCoin && selectedCoin.family !== "CAMPAIGN") refreshQuoteBalance(selectedCoin);
+    if ((s.screen === "token" || s.screen === "campaign") && selectedCoin) refreshQuoteBalance(selectedCoin);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.screen, s.tokenId, account]);
 
@@ -1694,8 +1694,17 @@ function buildCampaignModel(chain, c, s, myContribution) {
   // loaded (see getCampaignMeta) -- falls back to the platform default only
   // before that first load resolves.
   const contributorBps = detail ? Number(detail.contributorBps) : (s.raiseDefaults ? Number(s.raiseDefaults.contributorBps) : null);
-  const campaignSupply = detail ? Number(detail.totalSupply) / 1e18 : (c.totalSupply ? Number(c.totalSupply) / 1e18 : null);
+  const rawSupply = detail?.totalSupply ?? c.totalSupply;
+  const campaignSupply = rawSupply ? Number(rawSupply) / 1e18 : null;
   const contributorSupply = contributorBps != null && campaignSupply != null ? (campaignSupply * contributorBps) / 10_000 : null;
+
+  // Same asset the campaign actually collects contributions in (see
+  // quoteDecimals above) -- native balance is always kept fresh (s.nativeBalance),
+  // an ERC20 quote asset uses the same s.quoteBalance the trade panel reads.
+  const isNativeQuote = !c.quoteTokenAddress || c.quoteTokenAddress.toLowerCase() === "0x0000000000000000000000000000000000000000";
+  const contribBalance = isNativeQuote
+    ? Number(formatEther(s.nativeBalance)).toFixed(4)
+    : Number(formatUnits(s.quoteBalance, quoteDecimals)).toFixed(4);
 
   let actionTitle = "Contribute", actionSub = `Directly in ${quoteSymbol}. Refundable in full, in the same asset, if the goal is missed at the deadline.`;
   let cta = "Contribute " + quoteSymbol, ctaBg = LIME, ctaFg = "var(--on)", ctaNote = "Your allocation is recorded now; tokens are claimable only after finalize.";
@@ -1716,9 +1725,13 @@ function buildCampaignModel(chain, c, s, myContribution) {
     initials: c.initials, imageUrl: c.imageUrl, name: c.name, symbol: c.ticker, token: shortAddress(c.id), tokenAddress: c.id, status, stBg, stFg,
     desc: c.desc, socials: c.socials, quoteSymbol,
     raised: raised.toFixed(4), goal: goal.toFixed(4), pct: Math.round(pct) + "%",
-    backers: detail ? String(detail.contributions?.length ?? 0) : "…",
+    // A wallet contributing more than once is still one backer -- count
+    // distinct contributor addresses, not raw contribution rows.
+    backers: detail ? String(new Set((detail.contributions || []).map((ct) => ct.contributor?.toLowerCase())).size) : "…",
     deadline: resolved ? (c.campaignSucceeded ? "FINALIZED" : "FINALIZED · MISSED") : deadlinePassed ? "DEADLINE PASSED" : "RAISING",
     deadlineC: c.campaignSucceeded ? "var(--pos)" : c.campaignFailed ? "var(--neg)" : INK,
+    deadlineMs, isRaising: !resolved && !deadlinePassed,
+    contribAsset: quoteSymbol, contribBalance,
     progWidth: Math.min(100, Math.max(0, pct)), progFill: c.campaignFailed ? ORANGE : INK,
     note: c.campaignSucceeded
       ? "Raise complete. The escrowed supply is released, so you can claim your pro-rata allocation. The V4 pool is seeded and LP is locked in DuckLocker."
@@ -1733,14 +1746,24 @@ function buildCampaignModel(chain, c, s, myContribution) {
       { k: "TOKEN STATUS", v: resolved && c.campaignSucceeded ? "released" : "escrowed" },
       { k: "TRADEABLE", v: c.campaignSucceeded ? "yes" : "no" },
     ],
-    contribs: (detail?.contributions || []).map((ct) => {
+    contribs: Array.from(
+      // A wallet that contributed more than once gets one row, with its
+      // amounts summed -- not a separate row per on-chain contribution.
+      (detail?.contributions || []).reduce((byWallet, ct) => {
+        const key = ct.contributor?.toLowerCase();
+        const prev = byWallet.get(key);
+        if (prev) { prev.amount += Number(ct.amount); prev.claimed = prev.claimed || ct.claimed; prev.refunded = prev.refunded || ct.refunded; }
+        else byWallet.set(key, { contributor: ct.contributor, amount: Number(ct.amount), claimed: ct.claimed, refunded: ct.refunded });
+        return byWallet;
+      }, new Map()).values()
+    ).map((ct) => {
       // Same address-labeling treatment TokenPage's Trades/Holders already
       // get (Creator, DuckCrowdfund, DuckLocker, Burned, Liquidity Pool,
       // etc.) -- a contributor CAN be the campaign's own creator, or (post-
       // success, once claims/refunds route through it) the contract itself.
       const label = labelFor(chain, ct.contributor, { [c.creator?.toLowerCase()]: "Creator" });
       return {
-        wallet: label || shortAddress(ct.contributor), full: ct.contributor, eth: (Number(ct.amount) / 10 ** quoteDecimals).toFixed(4),
+        wallet: label || shortAddress(ct.contributor), full: ct.contributor, eth: (ct.amount / 10 ** quoteDecimals).toFixed(4),
         status: ct.claimed ? "claimed" : ct.refunded ? "refunded" : "pending", age: "",
       };
     }),
