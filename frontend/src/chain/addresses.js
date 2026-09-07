@@ -53,6 +53,17 @@ export const CHAIN = {
   V4_POSITION_MANAGER: getAddress("0x58daec3116aae6D93017bAAea7749052E8a04fA7"),
   V4_STATE_VIEW: getAddress("0xF3334192D15450CdD385c8B70e03f9A6bD9E673b"),
   PERMIT2: getAddress("0x000000000022D473030F116dDEE9F6B43aC78BA3"),
+  // Real V4 periphery on Robinhood Chain, from Uniswap's own official
+  // deployments list (developers.uniswap.org/docs/protocols/v4/deployments)
+  // -- cross-verified against this file's own already-correct V4_POOL_MANAGER/
+  // V4_POSITION_MANAGER/V4_STATE_VIEW (identical values), and confirmed to
+  // have real deployed bytecode via a live eth_getCode call before being
+  // wired in. Without these, chain/dex.js's post-migration/instant/crowdfund
+  // pool trading (buyOnPoolDirect/sellOnPoolDirect) can't run at all --
+  // requireRouterAndQuoter throws "Pool trading isn't available on this
+  // chain yet" the moment either is missing, exactly the gap these fix.
+  UNIVERSAL_ROUTER: getAddress("0x8876789976deCBFCbBbE364623c63652DB8c0904"),
+  V4_QUOTER: getAddress("0x8dc178EFb8111bB0973dd9d722ebeFF267c98f94"),
   V4_FEE_TIER,
   V4_TICK_SPACING,
 

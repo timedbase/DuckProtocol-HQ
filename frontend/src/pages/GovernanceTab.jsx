@@ -3,11 +3,17 @@ import { cs } from "../cs.js";
 import { AddressChip, LinkChip } from "../MetaChips.jsx";
 import { compactNumber } from "../adapters.js";
 
+// Matches the backend's real OZ Governor state enum (governance.ts) --
+// richer than a flat queued/executed/canceled flag set: Defeated/Succeeded/
+// Expired are real, distinct terminal states a proposal can land in, not
+// collapsed into a generic "Awaiting queue" bucket.
 const STATUS_STYLE = {
   Pending: { bg: "var(--paper)", fg: "var(--mute)" },
   Active: { bg: "var(--lime)", fg: "var(--on)" },
-  "Awaiting queue": { bg: "var(--paper)", fg: "var(--mute)" },
+  Defeated: { bg: "var(--paper)", fg: "var(--neg)" },
+  Succeeded: { bg: "var(--paper)", fg: "var(--pos)" },
   Queued: { bg: "var(--card)", fg: "var(--ink)" },
+  Expired: { bg: "var(--paper)", fg: "var(--mute)" },
   Executed: { bg: "var(--paper)", fg: "var(--pos)" },
   Canceled: { bg: "var(--paper)", fg: "var(--neg)" },
 };
@@ -29,11 +35,13 @@ function QuorumBar({ label, pct, met }) {
 
 function ProposalDetail({ v, p, onBack }) {
   const st = STATUS_STYLE[p.status] || STATUS_STYLE.Pending;
+  // OZ Governor's fixed GovernorCountingSimple support values.
+  const SUPPORT_CODE = { Against: 0, For: 1, Abstain: 2 };
   function vote(support) {
-    v.flash(`Demo mode — voting "${support}" isn't wired to a real wallet yet. Connect and this becomes a real transaction.`);
+    v.voteOnProposal(p, SUPPORT_CODE[support]);
   }
   function execute() {
-    v.flash("Demo mode — execution isn't wired to a real wallet yet.");
+    v.executeGovernanceProposal(p);
   }
   const now = Math.floor(Date.now() / 1000);
   const canVote = p.status === "Active";

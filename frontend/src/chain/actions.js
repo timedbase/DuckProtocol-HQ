@@ -3,7 +3,9 @@ import { mineVanitySalt } from "./vanity.js";
 import { simulateAndSend, simulateAndSendWithResult } from "./tx.js";
 import {
   DUCK_BONDING_CURVE_ABI, DUCK_LAUNCHER_ABI, DUCK_CROWDFUND_ABI, DUCK_LOCKER_ABI, DUCK_HOOK_ABI, DUCK_TOKEN_ABI,
+  DUCK_VAULT_ABI, DUCK_TOKEN_GOVERNOR_ABI,
 } from "./abis.js";
+import { keccak256, toBytes } from "viem";
 import { ZERO_ADDRESS } from "./addresses.js";
 
 // Every function here takes the resolved CHAINS[slug] config (see
@@ -399,4 +401,62 @@ export async function getTokenBalance(chain, token, account) {
 
 export async function getNativeBalance(chain, account) {
   return getPublicClient(chain).getBalance({ address: account });
+}
+
+// ---------- DuckVault (per-token lending market) ----------
+// Every amount here is already in the relevant asset's own raw on-chain
+// units (currency's own decimals for borrow/repay, the launched token's 18
+// decimals for collateral) -- callers (LendingTab.jsx) do the decimal
+// conversion, same division of responsibility as buyCurve/sellCurve above.
+// currency is always a real ERC20 (WETH, never native, even for a
+// native-quoted pool -- see docs/index.html's Lending page) so repay/
+// addCollateral always go through the same approve+pull path, no
+// native-value special case.
+
+export async function borrowFromVault(chain, { account, vault, amount }) {
+  return simulateAndSend(chain, { address: vault, abi: DUCK_VAULT_ABI, functionName: "borrow", args: [amount], account });
+}
+
+export async function repayVault(chain, { account, vault, currency, amount }) {
+  await ensureAllowance(chain, { account, token: currency, spender: vault, amount });
+  return simulateAndSend(chain, { address: vault, abi: DUCK_VAULT_ABI, functionName: "repay", args: [amount], account });
+}
+
+export async function addVaultCollateral(chain, { account, vault, token, amount }) {
+  await ensureAllowance(chain, { account, token, spender: vault, amount });
+  return simulateAndSend(chain, { address: vault, abi: DUCK_VAULT_ABI, functionName: "addCollateral", args: [amount], account });
+}
+
+export async function withdrawVaultCollateral(chain, { account, vault, amount }) {
+  return simulateAndSend(chain, { address: vault, abi: DUCK_VAULT_ABI, functionName: "withdrawCollateral", args: [amount], account });
+}
+
+export async function getVaultHealthFactor(chain, vault, borrower) {
+  return getPublicClient(chain).readContract({ address: vault, abi: DUCK_VAULT_ABI, functionName: "healthFactorBps", args: [borrower] });
+}
+
+// ---------- DuckTokenGovernor (per-token, lazily cloned on first proposal) ----------
+// support: 0 = Against, 1 = For, 2 = Abstain (OZ Governor's fixed
+// GovernorCountingSimple convention).
+
+export async function castVote(chain, { account, governor, proposalId, support }) {
+  return simulateAndSend(chain, { address: governor, abi: DUCK_TOKEN_GOVERNOR_ABI, functionName: "castVote", args: [BigInt(proposalId), support], account });
+}
+
+export async function castVoteWithReason(chain, { account, governor, proposalId, support, reason }) {
+  return simulateAndSend(chain, { address: governor, abi: DUCK_TOKEN_GOVERNOR_ABI, functionName: "castVoteWithReason", args: [BigInt(proposalId), support, reason || ""], account });
+}
+
+// targets/values/calldatas come straight from the subgraph's Proposal
+// entity (indexed off the real ProposalCreated event, never reconstructed
+// by hand) -- descriptionHash must match EXACTLY what propose() hashed
+// (keccak256 of the raw description string) or execute() reverts with a
+// proposal-id mismatch, same OZ Governor convention this whole stack
+// already follows.
+export async function executeProposal(chain, { account, governor, targets, values, calldatas, description }) {
+  const descriptionHash = keccak256(toBytes(description || ""));
+  return simulateAndSend(chain, {
+    address: governor, abi: DUCK_TOKEN_GOVERNOR_ABI, functionName: "execute",
+    args: [targets, values.map((v) => BigInt(v)), calldatas, descriptionHash], account,
+  });
 }

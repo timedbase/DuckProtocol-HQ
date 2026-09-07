@@ -8,6 +8,8 @@ import createCampaignsRouter from "./routes/campaigns.js";
 import createPortfolioRouter from "./routes/portfolio.js";
 import createPlatformRouter from "./routes/platform.js";
 import createPriceRouter from "./routes/price.js";
+import createVaultsRouter from "./routes/vaults.js";
+import createGovernanceRouter from "./routes/governance.js";
 import uploadRouter from "./routes/upload.js";
 import createCommentsRouter from "./routes/comments.js";
 import { CHAIN_SLUGS } from "../chain/registry.js";
@@ -42,6 +44,8 @@ for (const chain of CHAIN_SLUGS) {
   app.use(`/${chain}/campaigns`, createCampaignsRouter(chain));
   app.use(`/${chain}/portfolio`, createPortfolioRouter(chain));
   app.use(`/${chain}/price`, createPriceRouter(chain));
+  app.use(`/${chain}/vaults`, createVaultsRouter(chain));
+  app.use(`/${chain}/governance`, createGovernanceRouter(chain));
   app.use(`/${chain}`, createPlatformRouter(chain));
 }
 app.use("/upload", uploadRouter);

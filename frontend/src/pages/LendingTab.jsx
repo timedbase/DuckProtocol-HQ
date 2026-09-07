@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { parseUnits } from "viem";
 import { cs } from "../cs.js";
 import { compactNumber } from "../adapters.js";
 
@@ -38,8 +39,18 @@ export default function LendingTab({ v }) {
     { k: "CLOSE FACTOR", v: (cfg.closeFactorBps / 100).toFixed(0) + "%" },
   ] : [];
 
-  function submitDemo(action) {
-    v.flash(`Demo mode — ${action} isn't wired to a real wallet yet. Connect and this becomes a real transaction.`);
+  function submit() {
+    const num = Number(amount);
+    if (!amount || !(num > 0)) return v.flash("Enter an amount.");
+    if (tab === "borrow") {
+      return v.borrowVault(mkt.vault, parseUnits(amount, dec), mkt.token.id);
+    }
+    if (tab === "repay") {
+      return v.repayVaultLoan(mkt.vault, mkt.currency, parseUnits(amount, dec), mkt.token.id);
+    }
+    const tokenAmount = parseUnits(amount, 18); // the launched token itself is always 18 decimals
+    if (tab === "add collateral") return v.addCollateral(mkt.vault, mkt.token.id, tokenAmount, mkt.token.id);
+    return v.withdrawCollateral(mkt.vault, tokenAmount, mkt.token.id);
   }
 
   // Single column, not a content+sidebar split -- this tab is already
@@ -78,30 +89,30 @@ export default function LendingTab({ v }) {
       )}
 
       <div style={cs("padding:16px;border-bottom:1px solid var(--line)")}>
-        <div style={cs("display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:14px;max-width:420px")}>
-          {["borrow", "repay", "collateral"].map((t) => (
-            <button key={t} onClick={() => setTab(t)} style={cs(`flex:1;padding:10px;border:0;background:${tab === t ? "var(--paper)" : "transparent"};font-size:12px;font-weight:700;text-transform:capitalize;cursor:pointer;color:var(--ink)`)}>{t}</button>
+        <div style={cs("display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:14px;max-width:420px;flex-wrap:wrap")}>
+          {["borrow", "repay", "add collateral", "withdraw"].map((t) => (
+            <button key={t} onClick={() => { setTab(t); setAmount(""); }} style={cs(`flex:1;min-width:90px;padding:10px 6px;border:0;background:${tab === t ? "var(--paper)" : "transparent"};font-size:11.5px;font-weight:700;text-transform:capitalize;cursor:pointer;color:var(--ink)`)}>{t}</button>
           ))}
         </div>
         <div style={cs("display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;max-width:420px")}>
           <label style={cs("flex:1;min-width:180px;display:flex;flex-direction:column;gap:8px")}>
             <span style={cs("font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--mute)")}>
-              {tab === "collateral" ? `AMOUNT (${mkt.token.symbol})` : `AMOUNT (${mkt.currencySymbol || "—"})`}
+              {tab === "add collateral" || tab === "withdraw" ? `AMOUNT (${mkt.token.symbol})` : `AMOUNT (${mkt.currencySymbol || "—"})`}
             </span>
             <input
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
               placeholder="0.0"
-              disabled={!mkt.enabled}
+              disabled={!mkt.enabled || !v.connected}
               style={cs("width:100%;box-sizing:border-box;padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font-family:'JetBrains Mono',monospace;font-size:15px")}
             />
           </label>
           <button
-            disabled={!mkt.enabled}
-            onClick={() => submitDemo(tab === "borrow" ? "Borrow" : tab === "repay" ? "Repay" : "Add/withdraw collateral")}
-            style={cs(`padding:13px 22px;border:1px solid var(--line);border-radius:8px;cursor:${mkt.enabled ? "pointer" : "not-allowed"};font-size:13.5px;font-weight:700;background:${mkt.enabled ? "var(--lime)" : "var(--paper)"};color:${mkt.enabled ? "var(--on)" : "var(--mute)"}`)}
+            disabled={!mkt.enabled || !v.connected}
+            onClick={submit}
+            style={cs(`padding:13px 22px;border:1px solid var(--line);border-radius:8px;cursor:${mkt.enabled ? "pointer" : "not-allowed"};font-size:13.5px;font-weight:700;background:${mkt.enabled ? "var(--lime)" : "var(--paper)"};color:${mkt.enabled ? "var(--on)" : "var(--mute)"};text-transform:capitalize`)}
           >
-            {tab === "borrow" ? "Borrow" : tab === "repay" ? "Repay" : "Manage collateral"}
+            {tab}
           </button>
         </div>
         {!v.connected && <div style={cs("font-size:11.5px;color:var(--mute);margin-top:10px")}>Connect a wallet to borrow against your holdings.</div>}

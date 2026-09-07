@@ -20,6 +20,8 @@ import {
   claimFees, claimAllFees, getPosition, getPositionCreator, getPool, getCtoApplication,
   applyForCTO, getCtoFee, setHookFeeSplits, getHookFeeSplits, getHookAccruedFees,
   getNativeBalance, waitForTx, getPlatformTokens, getTokenBalance,
+  borrowFromVault, repayVault, addVaultCollateral, withdrawVaultCollateral,
+  castVote, executeProposal,
 } from "./chain/actions.js";
 import { buyOnPoolDirect, sellOnPoolDirect } from "./chain/dex.js";
 import { previewCurveBuy, previewCurveSell, previewPoolBuyDirect, previewPoolSellDirect, applySlippage } from "./chain/quotes.js";
@@ -706,6 +708,43 @@ export default function App() {
     }
   }
 
+  // ---------- lending ----------
+  // Every amount arrives already parsed to raw units by the caller
+  // (LendingTab.jsx, using the vault's own currencyDecimals for
+  // borrow/repay or 18 for the launched token itself for collateral) --
+  // matches buy/sell's own division of responsibility below. Refreshes the
+  // vault detail on success so reserves/borrows/the open-positions table
+  // reflect the new state without a manual reload.
+  async function borrowVault(vault, amount, tokenAddress) {
+    const hash = await runTx("Borrow", () => borrowFromVault(chain, { account, vault, amount }));
+    if (hash) loadTokenVault(tokenAddress);
+  }
+  async function repayVaultLoan(vault, currency, amount, tokenAddress) {
+    const hash = await runTx("Repay", () => repayVault(chain, { account, vault, currency, amount }));
+    if (hash) loadTokenVault(tokenAddress);
+  }
+  async function addCollateral(vault, token, amount, tokenAddress) {
+    const hash = await runTx("Add collateral", () => addVaultCollateral(chain, { account, vault, token, amount }));
+    if (hash) loadTokenVault(tokenAddress);
+  }
+  async function withdrawCollateral(vault, amount, tokenAddress) {
+    const hash = await runTx("Withdraw collateral", () => withdrawVaultCollateral(chain, { account, vault, amount }));
+    if (hash) loadTokenVault(tokenAddress);
+  }
+
+  // ---------- governance ----------
+
+  async function voteOnProposal(p, support) {
+    const hash = await runTx("Vote", () => castVote(chain, { account, governor: p.governor, proposalId: p.proposalId, support }));
+    if (hash) openProposal(p.id); // reuse the already-known-correct compound id rather than reconstructing it
+  }
+  async function executeGovernanceProposal(p) {
+    const hash = await runTx("Execute", () => executeProposal(chain, {
+      account, governor: p.governor, targets: p.targets, values: p.values, calldatas: p.calldatas, description: p.description,
+    }));
+    if (hash) openProposal(p.id);
+  }
+
   // ---------- trading ----------
 
   // The trade panel's "PAY {asset} · BAL {n}" display needs the real
@@ -1138,6 +1177,8 @@ export default function App() {
     contribute, claimCampaignTokens, claimCampaignRefundAction, finalizeCampaignAction,
     claimCreatorFees, claimAllCreatorFees, loadCreatorData, claimCreatorAndHookFees, claimCurveFeeAction, saveFeeSplits, buyTakeover,
     loadTokenVault, loadTokenProposals, openProposal,
+    borrowVault, repayVaultLoan, addCollateral, withdrawCollateral,
+    voteOnProposal, executeGovernanceProposal,
   });
 
   const m = v.isMobile;
@@ -1604,6 +1645,9 @@ function buildViewModel(ctx) {
     vaultsLoading: s.vaultsLoading, vaultDetail: s.vaultDetail, vaultConfigData: s.vaultConfigData,
     proposals: s.proposals, proposalsLoading: s.proposalsLoading, proposalDetail: s.proposalDetail,
     openProposal: ctx.openProposal,
+    borrowVault: ctx.borrowVault, repayVaultLoan: ctx.repayVaultLoan,
+    addCollateral: ctx.addCollateral, withdrawCollateral: ctx.withdrawCollateral,
+    voteOnProposal: ctx.voteOnProposal, executeGovernanceProposal: ctx.executeGovernanceProposal,
 
     tx: walletTx, txOpen: !!s.tx, closeTx: () => set({ tx: null }),
     toast: s.toast,
