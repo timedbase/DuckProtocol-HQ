@@ -1,10 +1,13 @@
 // Talks to the backend in ../../backend (a thin API in front of the
 // Goldsky subgraph + live contract reads, see its README). Always hits the
-// real network -- there is no demo/canned-data mode anymore; VITE_API_URL
-// must point at a real, reachable backend.
+// real network -- there is no demo/canned-data mode anymore. Defaults to
+// the real deployed DuckProtocol backend so a deployment with no
+// VITE_API_URL set (e.g. a missing Vercel env var) still works instead of
+// silently falling back to an unreachable localhost; VITE_API_URL still
+// overrides this for local backend development.
 import { CHAIN } from "./chain/addresses.js";
 
-export const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+export const API_BASE = import.meta.env.VITE_API_URL || "https://api.duckfun.family";
 
 function buildQuoteSymbols(chain) {
   const table = Object.fromEntries(chain.DEFAULT_QUOTE_TOKENS.map((t) => [t.address.toLowerCase(), t.symbol]));
