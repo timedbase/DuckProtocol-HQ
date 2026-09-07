@@ -1216,7 +1216,7 @@ export default function App() {
           {m ? v.chainName.toUpperCase() : v.chainName} {v.chainId}{v.health.frontendMs != null && ` · ${v.health.frontendMs}ms`}
         </span>
         <div style={cs("margin-left:auto;display:flex;gap:6px")}>
-          <a href="/docs/" target="_blank" rel="noreferrer" title="Docs" style={cs("width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)")}>
+          <a href="https://docs.duckfun.family" target="_blank" rel="noreferrer" title="Docs" style={cs("width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)")}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v4h4" /><path d="M9 12h6M9 16h6" /></svg>
           </a>
           <a href="https://x.com/duckfunfamily" target="_blank" rel="noreferrer" title="duckfun on X" style={cs("width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)")}>
