@@ -39,6 +39,7 @@ function staticLabelsFor(chain) {
     [chain.DUCK_CROWDFUND.toLowerCase()]: "DuckCrowdfund",
     [chain.DUCK_LOCKER.toLowerCase()]: "DuckLocker (LP lock)",
     [chain.DUCK_HOOK.toLowerCase()]: "DuckHookV4",
+    [chain.DUCK_HOOK_LEGACY.toLowerCase()]: "DuckHookV4",
     [chain.V4_POOL_MANAGER.toLowerCase()]: "Liquidity Pool",
     [BURN_ADDRESS]: "Burned",
   };

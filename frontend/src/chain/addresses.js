@@ -33,7 +33,15 @@ export const CHAIN = {
   DUCK_LAUNCHER: getAddress("0xDA4fAD8E339d1F1f243C810CCDa29de80c5040Dc"),
   DUCK_CROWDFUND: getAddress("0x5066B217106De6f7b1A5F43eAa138C3C6306FC7d"),
   DUCK_LOCKER: getAddress("0xbaA2A0F17922729F5Aa826ec5b0B927583260E03"),
-  DUCK_HOOK: getAddress("0x2F030392B3472BbE30Dc36e960eFc226744140C4"),
+  // The default for NEW launches only -- a pool's hook is permanently bound
+  // into its PoolKey at creation (Uniswap v4), so per-token reads must use
+  // that token's own real hook (coin.hook / Token.hook), never this
+  // constant blindly. Redeployed 2026-09-08 to add a buy-side quote fee
+  // (the old hook's mined address lacked the permission bit that needs --
+  // see DuckHookV4.sol's REQUIRED_PERMISSIONS comment); DUCK_HOOK_LEGACY is
+  // kept only so old-hook activity is still recognized/labeled in the UI.
+  DUCK_HOOK: getAddress("0xA62a288125E730622a75006ed54a3ecD73B740cc"),
+  DUCK_HOOK_LEGACY: getAddress("0x2F030392B3472BbE30Dc36e960eFc226744140C4"),
 
   // Lending -- new in DuckProtocol, no legacy equivalent.
   DUCK_VAULT_FACTORY: getAddress("0xeB191E04445046cDD3f21Bae6e79Ef78bE08D28F"),

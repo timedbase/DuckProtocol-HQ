@@ -28,7 +28,7 @@ const HOOK_POOLS_ABI = parseAbi([
 ]);
 
 type SubgraphVault = {
-  id: string; token: { id: string; symbol: string | null }; family: string; creator: string;
+  id: string; token: { id: string; symbol: string | null; hook: string | null }; family: string; creator: string;
   governor: string | null; currency: string | null; poolId: string | null; enabled: boolean;
 };
 
@@ -77,10 +77,20 @@ async function summarizeVault(chain: ChainSlug, v: SubgraphVault) {
   // Only resolvable once a real pool exists (poolId set) -- a pre-migration
   // curve token's vault has none yet, and is already shown as disabled in
   // the UI regardless, so null here is honest, not a gap.
+  //
+  // Must read off the SAME hook this token's pool actually registered
+  // against, not a single global default -- a pool's hook is permanently
+  // bound into its PoolKey at creation (Uniswap v4), so once more than one
+  // DuckHookV4 exists (a new one deployed for a fee-model change, say), a
+  // global constant would silently read the wrong contract for anything
+  // still on an older hook. Token.hook (set by DuckLocker's
+  // PositionRegistered handler, uniformly across all 3 families -- see
+  // duck-locker.ts) is the real, per-token source of truth for this.
   let vaultBps: number | null = null;
   if (v.poolId) {
     try {
-      const pool = await client.readContract({ address: ADDRESSES[chain].DUCK_HOOK, abi: HOOK_POOLS_ABI, functionName: "pools", args: [v.poolId as `0x${string}`] });
+      const hookAddress = v.token.hook ? getAddress(v.token.hook) : ADDRESSES[chain].DUCK_HOOK;
+      const pool = await client.readContract({ address: hookAddress, abi: HOOK_POOLS_ABI, functionName: "pools", args: [v.poolId as `0x${string}`] });
       vaultBps = pool[7];
     } catch {
       vaultBps = null;
@@ -148,7 +158,7 @@ export default function createVaultsRouter(chain: ChainSlug) {
     try {
       const data = await querySubgraph<{ vaults: SubgraphVault[] }>(
         chain,
-        `query Vaults { vaults(first: 200, orderBy: createdAtBlock, orderDirection: desc) { id token { id symbol } family creator governor currency poolId enabled } }`
+        `query Vaults { vaults(first: 200, orderBy: createdAtBlock, orderDirection: desc) { id token { id symbol hook } family creator governor currency poolId enabled } }`
       );
       res.json(await Promise.all(data.vaults.map((v) => summarizeVault(chain, v))));
     } catch (err) {
@@ -161,7 +171,7 @@ export default function createVaultsRouter(chain: ChainSlug) {
     try {
       const data = await querySubgraph<{ vaults: SubgraphVault[] }>(
         chain,
-        `query VaultForToken($token: String!) { vaults(where: { token: $token }, first: 1) { id token { id symbol } family creator governor currency poolId enabled } }`,
+        `query VaultForToken($token: String!) { vaults(where: { token: $token }, first: 1) { id token { id symbol hook } family creator governor currency poolId enabled } }`,
         { token: tokenAddress }
       );
       const vault = data.vaults[0];

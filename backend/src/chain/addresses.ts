@@ -11,6 +11,7 @@ export type ChainAddresses = {
   DUCK_CROWDFUND: Address;
   DUCK_LOCKER: Address;
   DUCK_HOOK: Address;
+  DUCK_HOOK_LEGACY: Address;
   DUCK_VAULT_FACTORY: Address;
   DUCK_VAULT_CONFIG: Address;
   DUCK_TOKEN_GOVERNOR_FACTORY: Address;
@@ -33,7 +34,14 @@ const robinhood: ChainAddresses = {
   DUCK_LAUNCHER: getAddress("0xDA4fAD8E339d1F1f243C810CCDa29de80c5040Dc"),
   DUCK_CROWDFUND: getAddress("0x5066B217106De6f7b1A5F43eAa138C3C6306FC7d"),
   DUCK_LOCKER: getAddress("0xbaA2A0F17922729F5Aa826ec5b0B927583260E03"),
-  DUCK_HOOK: getAddress("0x2F030392B3472BbE30Dc36e960eFc226744140C4"),
+  // Default for NEW launches only -- vaults.ts resolves each token's real
+  // hook from the subgraph's Token.hook instead of trusting this blindly,
+  // since a pool's hook is permanently bound into its PoolKey at creation.
+  // Redeployed 2026-09-08 to add a buy-side quote fee (see
+  // DuckProtocol/shared/DuckHookV4.sol's REQUIRED_PERMISSIONS comment for
+  // why the old address couldn't just be upgraded in place).
+  DUCK_HOOK: getAddress("0xA62a288125E730622a75006ed54a3ecD73B740cc"),
+  DUCK_HOOK_LEGACY: getAddress("0x2F030392B3472BbE30Dc36e960eFc226744140C4"),
   DUCK_VAULT_FACTORY: getAddress("0xeB191E04445046cDD3f21Bae6e79Ef78bE08D28F"),
   DUCK_VAULT_CONFIG: getAddress("0x74738a87e4D4E0eB2706724a9314d1b4452ecdFE"),
   DUCK_TOKEN_GOVERNOR_FACTORY: getAddress("0x6A73DA9BC5Ecb8cCD4EccEBf53e3591B2cc30D0d"),
