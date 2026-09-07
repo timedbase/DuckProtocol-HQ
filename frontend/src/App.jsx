@@ -1776,8 +1776,10 @@ function buildCampaignModel(chain, c, s, myContribution) {
     timeline: [
       { k: "Token deployed", v: "At creation, verifiable on Blockscout before a single contribution.", on: true },
       { k: "Supply escrowed", v: "Full backer supply minted to the raise contract; transfers disabled.", on: true },
-      { k: "Contributions open", v: "Native ETH accrues until the deadline. No price, no trading.", on: !resolved || true },
-      { k: "Goal cleared", v: "ETH swaps to the quote asset, seeds a two-sided V4 pool, LP locks, claims open.", on: c.campaignSucceeded },
+      { k: "Contributions open", v: `${quoteSymbol} accrues until the deadline. No price, no trading.`, on: !resolved || true },
+      // No swap ever happens -- the raised ${quoteSymbol} is paired directly
+      // with the escrowed supply as-is (see DuckCrowdfund._seedSuccessLiquidity).
+      { k: "Goal cleared", v: `Raised ${quoteSymbol} seeds a two-sided V4 pool directly with the escrowed supply, LP locks, claims open.`, on: c.campaignSucceeded },
       { k: "Goal missed", v: "No pool, no release. Refunds unlock, one claim per contributor.", on: c.campaignFailed },
     ],
     actionTitle, actionSub, cta, ctaBg, ctaFg, ctaNote, canContribute,
