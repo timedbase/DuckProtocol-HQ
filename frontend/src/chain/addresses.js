@@ -153,7 +153,7 @@ export const VAULT_BPS_OPTIONS = [
 // real rates, not a "0 means something else" special case.
 export const HOOK_FEE_BPS_OPTIONS = [
   { bps: 100, label: "1%" },
-  { bps: 200, label: "2% (default)" },
+  { bps: 200, label: "2%" },
   { bps: 300, label: "3%" },
   { bps: 500, label: "5%" },
 ];
