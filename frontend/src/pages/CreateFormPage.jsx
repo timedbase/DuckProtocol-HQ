@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { parseAbi } from "viem";
 import { cs } from "../cs.js";
-import { CHAIN, SUPPLY_TIERS, VAULT_BPS_OPTIONS } from "../chain/addresses.js";
+import { CHAIN, SUPPLY_TIERS, VAULT_BPS_OPTIONS, HOOK_FEE_BPS_OPTIONS } from "../chain/addresses.js";
 import { logoFor } from "../chain/quoteLogos.js";
 import { getPublicClient } from "../chain/client.js";
 import { api } from "../api.js";
@@ -229,6 +229,25 @@ function VaultBpsPicker({ value, onPick }) {
   );
 }
 
+// Same 4-choice grid pattern as VaultBpsPicker, one row of flat percentages
+// instead of a split -- this is the pool's own trading fee (taken on both
+// buy and sell, see DuckHookV4.sol), the thing the CREATOR/VAULT split
+// above actually divides up.
+function HookFeeBpsPicker({ value, onPick }) {
+  return (
+    <div style={cs("display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px")}>
+      {HOOK_FEE_BPS_OPTIONS.map((o) => {
+        const active = value === o.bps;
+        return (
+          <button key={o.bps} onClick={() => onPick(o.bps)} style={cs(`text-align:center;border:1px solid var(--line);border-radius:8px;cursor:pointer;padding:8px 6px;min-width:0;box-sizing:border-box;overflow:hidden;background:${active ? "var(--ink)" : "var(--card)"};color:${active ? "var(--card)" : "var(--ink)"}`)}>
+            <div style={cs("font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{o.label}</div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // A live look at how the token will actually show up on Discover/its own
 // token page, updating as the form is filled in -- brew.family's own
 // create page keeps exactly this next to the form for the same reason:
@@ -308,11 +327,15 @@ export default function CreateFormPage({ v }) {
   }[family];
 
   const costs = {
-    incubation: [{ k: "TRADING FEE", v: "sell-side fee via DuckHookV4 once migrated, split by your creator/vault choice below" }],
-    launcher: [{ k: "POOL FEE / TICK SPACING", v: "10000 / 200 (1%)" }],
+    incubation: [{ k: "TRADING FEE", v: "Taken on every buy and sell via DuckHookV4 once migrated, split by your creator/vault choice above" }],
+    launcher: [
+      { k: "POOL FEE / TICK SPACING", v: "10000 / 200 (1%)" },
+      { k: "TRADING FEE", v: "Taken on every buy and sell via DuckHookV4 from block one, split by your creator/vault choice above" },
+    ],
     raise: [
       { k: "CREATION FEE", v: v.raiseDefaults ? `${Number(v.raiseDefaults.campaignFee) / 1e18} ${v.nativeSymbol}, paid on launch (waived if quoted in the platform token)` : "loading…" },
       { k: "REFUND IF MISSED", v: "100%, in the same asset contributed" },
+      { k: "TRADING FEE", v: "Taken on every buy and sell via DuckHookV4 once the raise succeeds, split by your creator/vault choice above" },
     ],
   }[family];
 
@@ -362,11 +385,14 @@ export default function CreateFormPage({ v }) {
             </Field>
           </Section>
 
-          <Section step={2} title="Supply & fee split" sub="Fixed menus, not free-form numbers -- both are locked in permanently once this token deploys.">
+          <Section step={2} title="Supply & fee split" sub="Fixed menus, not free-form numbers -- all three are locked in permanently once this token deploys.">
             <Field label="TOTAL SUPPLY" hint="Fixed menu -- there is no free-form supply amount">
               <TierPicker value={draft.supplyTier} onPick={(tier) => setDraft({ supplyTier: tier })} />
             </Field>
-            <Field label="CREATOR / VAULT FEE SPLIT" hint="Immutable after creation -- the vault share funds this token's own lending market">
+            <Field label="TRADING FEE" hint="Taken on every buy and sell once this token has a real pool">
+              <HookFeeBpsPicker value={draft.hookFeeBps} onPick={(bps) => setDraft({ hookFeeBps: bps })} />
+            </Field>
+            <Field label="CREATOR / VAULT FEE SPLIT" hint="How the trading fee above gets divided -- the vault share funds this token's own lending market">
               <VaultBpsPicker value={draft.vaultBps} onPick={(bps) => setDraft({ vaultBps: bps })} />
             </Field>
           </Section>

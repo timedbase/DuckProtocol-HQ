@@ -145,6 +145,19 @@ export const VAULT_BPS_OPTIONS = [
   { bps: 10000, label: "0% creator / 100% vault" },
 ];
 
+// The pool's own trading fee, taken on both buy and sell now (see
+// DuckHookV4.sol) -- fixed menu enforced on-chain by
+// DuckHookV4._isValidHookFeeBps. 200 (2%) is the on-chain default whether
+// you send 0 or 200 explicitly; sent as 200 here rather than relying on
+// that 0-means-default indirection, so this list is a literal menu of
+// real rates, not a "0 means something else" special case.
+export const HOOK_FEE_BPS_OPTIONS = [
+  { bps: 100, label: "1%" },
+  { bps: 200, label: "2% (default)" },
+  { bps: 300, label: "3%" },
+  { bps: 500, label: "5%" },
+];
+
 export function isChainSlug(value) {
   return value === "robinhood";
 }

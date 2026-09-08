@@ -197,9 +197,9 @@ export default function App() {
     previewOut: null, previewLoading: false, simulating: false,
     nativeBalance: 0n, quoteBalance: 0n, txPending: false, tx: null, toast: "",
     portfolio: EMPTY_PORTFOLIO, coins: [], coinsLoading: true, coinsError: "",
-    draftCurve: { name: "", ticker: "", desc: "", quoteToken: ZERO_ADDRESS, supplyTier: 0, vaultBps: 0, startTargetUsd: "20000", migrationTargetUsd: "150000", earlyBuyAmount: "0", socials: EMPTY_SOCIALS },
-    draftInstant: { name: "", ticker: "", desc: "", quoteToken: ZERO_ADDRESS, supplyTier: 0, vaultBps: 0, launchMarketCapUsd: "25000", buyAmountHype: "0", socials: EMPTY_SOCIALS },
-    draftCampaign: { name: "", ticker: "", desc: "", dexQuoteAsset: ZERO_ADDRESS, supplyTier: 0, vaultBps: 0, goalUsd: "125000", socials: EMPTY_SOCIALS },
+    draftCurve: { name: "", ticker: "", desc: "", quoteToken: ZERO_ADDRESS, supplyTier: 0, vaultBps: 0, hookFeeBps: 200, startTargetUsd: "20000", migrationTargetUsd: "150000", earlyBuyAmount: "0", socials: EMPTY_SOCIALS },
+    draftInstant: { name: "", ticker: "", desc: "", quoteToken: ZERO_ADDRESS, supplyTier: 0, vaultBps: 0, hookFeeBps: 200, launchMarketCapUsd: "25000", buyAmountHype: "0", socials: EMPTY_SOCIALS },
+    draftCampaign: { name: "", ticker: "", desc: "", dexQuoteAsset: ZERO_ADDRESS, supplyTier: 0, vaultBps: 0, hookFeeBps: 200, goalUsd: "125000", socials: EMPTY_SOCIALS },
     draftImage: EMPTY_IMAGE,
     raiseDefaults: null, platformTokens: { incubation: null, launcher: null, raise: null },
     creatorData: null, creatorLoading: false,
@@ -895,7 +895,7 @@ export default function App() {
         const r = await createCurveToken(chain, {
           account: acct, name: d.name.trim(), symbol, supplyTier: d.supplyTier,
           curveBps: 8000n, liquidityBps: 2000n, quoteToken: d.quoteToken, startVirtualQuote, migrationTargetQuote,
-          hookFeeBps: 0n, vaultBps: d.vaultBps, metaURI,
+          hookFeeBps: BigInt(d.hookFeeBps), vaultBps: d.vaultBps, metaURI,
           buyAmountWei: isNativeQuoted ? earlyBuyAmount : 0n, earlyBuyAmount: isNativeQuoted ? 0n : earlyBuyAmount,
         });
         createdAddress = r.tokenAddress.toLowerCase();
@@ -920,7 +920,7 @@ export default function App() {
       const hash = await runTx("Launch", async () => {
         const r = await launchInstant(chain, {
           account: acct, name: d.name.trim(), symbol, metaURI, quoteToken: d.quoteToken, supplyTier: d.supplyTier,
-          launchMarketCap, quoteAmountWei: buyWei, vaultBps: d.vaultBps,
+          launchMarketCap, quoteAmountWei: buyWei, vaultBps: d.vaultBps, hookFeeBps: BigInt(d.hookFeeBps),
         });
         createdAddress = r.tokenAddress.toLowerCase();
         return r.hash;
@@ -943,7 +943,7 @@ export default function App() {
       const hash = await runTx("Create campaign", async () => {
         const r = await createCampaign(chain, {
           account: acct, name: d.name.trim(), symbol, metaURI, dexQuoteAsset: d.dexQuoteAsset, goalWei,
-          supplyTier: d.supplyTier, vaultBps: d.vaultBps,
+          supplyTier: d.supplyTier, vaultBps: d.vaultBps, hookFeeBps: BigInt(d.hookFeeBps),
         });
         createdAddress = r.tokenAddress.toLowerCase(); createdCampaignId = r.campaignId;
         return r.hash;
@@ -982,7 +982,7 @@ export default function App() {
         await createCurveToken(chain, {
           account, name: d.name.trim(), symbol, supplyTier: d.supplyTier,
           curveBps: 8000n, liquidityBps: 2000n, quoteToken: d.quoteToken, startVirtualQuote, migrationTargetQuote,
-          hookFeeBps: 0n, vaultBps: d.vaultBps, metaURI,
+          hookFeeBps: BigInt(d.hookFeeBps), vaultBps: d.vaultBps, metaURI,
           buyAmountWei: isNativeQuoted ? earlyBuyAmount : 0n, earlyBuyAmount: isNativeQuoted ? 0n : earlyBuyAmount,
           dryRun: true,
         });
@@ -996,7 +996,7 @@ export default function App() {
         const buyWei = d.buyAmountHype && Number(d.buyAmountHype) > 0 ? parseEther(String(d.buyAmountHype)) : 0n;
         await launchInstant(chain, {
           account, name: d.name.trim(), symbol, metaURI, quoteToken: d.quoteToken, supplyTier: d.supplyTier,
-          launchMarketCap, quoteAmountWei: buyWei, vaultBps: d.vaultBps,
+          launchMarketCap, quoteAmountWei: buyWei, vaultBps: d.vaultBps, hookFeeBps: BigInt(d.hookFeeBps),
           dryRun: true,
         });
       } else {
@@ -1008,7 +1008,7 @@ export default function App() {
         const goalWei = await resolveQuoteUnits(chain, d.dexQuoteAsset, d.goalUsd || "1");
         await createCampaign(chain, {
           account, name: d.name.trim(), symbol, metaURI, dexQuoteAsset: d.dexQuoteAsset, goalWei,
-          supplyTier: d.supplyTier, vaultBps: d.vaultBps,
+          supplyTier: d.supplyTier, vaultBps: d.vaultBps, hookFeeBps: BigInt(d.hookFeeBps),
           dryRun: true,
         });
       }
