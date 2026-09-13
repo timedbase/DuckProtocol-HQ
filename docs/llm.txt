@@ -1,0 +1,136 @@
+# DuckProtocol (duckfun.family)
+
+> DuckProtocol is a token launchpad with per-token lending and governance on Robinhood Chain (chain id 4663) and Ink (chain id 57073). Tokens launch through a bonding curve, an instant Uniswap V4 pool, or a crowdfund. Every pool is a Uniswap V4 pool with fee tier 0, tick spacing 200, and the chain's DuckHookV4 hook, which takes a 2-10% trading fee in the quote currency on buys and sells. All actions are permissionless contract calls; a public REST API serves token, trade, holder and USD price data.
+
+Docs: https://docs.duckfun.family
+App: https://duckfun.family
+API base: https://api.duckfun.family (routes prefixed /robinhood or /ink)
+
+## Docs
+
+- [Overview](https://docs.duckfun.family/#/overview): the three launch families and shared core
+- [Integration quickstart](https://docs.duckfun.family/#/integrate): chains, addresses, ABIs, conventions
+- [Launching tokens](https://docs.duckfun.family/#/integrate-launch): vanity salt mining and createToken / launch calls
+- [Trading](https://docs.duckfun.family/#/integrate-trade): curve trades, V4 PoolKey, Quoter, Universal Router encoding
+- [Reading data & events](https://docs.duckfun.family/#/integrate-data): REST fields, live reads, event signatures
+- [Fees, rewards & errors](https://docs.duckfun.family/#/integrate-fees): claimFees, processBatch, triggerBuyback, error names
+- [DuckHookV4](https://docs.duckfun.family/#/hook): trading fee, fee claims, same-block guard, CTO
+- [Fees & Supply Tiers](https://docs.duckfun.family/#/fees)
+- [Holder rewards](https://docs.duckfun.family/#/holder-rewards)
+- [DuckVault lending](https://docs.duckfun.family/#/vault) and [Governance](https://docs.duckfun.family/#/governance)
+- [USD pricing](https://docs.duckfun.family/#/pricing)
+- [API reference](https://docs.duckfun.family/#/api)
+- [Contract addresses](https://docs.duckfun.family/#/addresses)
+
+## Contract addresses
+
+Same address on both chains:
+- DuckBondingCurve: 0xcE71ce995C2A3657aF9bEC45bA1Ee2E8fA2ef5eF
+- DuckBondingCurveViews: 0x6cd84c6e3da0295b4a2787f1794a908a26fe8ba1
+- DuckLauncher: 0x5F37c68f9937A0524Cc441b4E1080Ca4F089693B
+- DuckCrowdfund: 0xdA868A545aB058D14a70C46CA7760226e7Dcf7b9
+- DuckVaultFactory: 0x006e53d079BB4c2010682a4896D1950965faD5A5
+- DuckVaultConfig: 0x2526d694F9b6cCefE46871D1b40aeEc1313eabfB
+- DuckTokenGovernorFactory: 0x29e600073c29b4f646C54c78AeE97aE8AE888999
+- DuckToken implementation (clone template): 0x83A491C728b0485A887fE9D7360C4Ae7eF8B1461
+- Permit2: 0x000000000022D473030F116dDEE9F6B43aC78BA3
+
+Robinhood Chain (4663), RPC https://rpc.mainnet.chain.robinhood.com, explorer https://robinhoodchain.blockscout.com:
+- DuckHookV4: 0x483b529fa121c5402778a511A98fB326940042CC
+- WETH: 0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73
+- Uniswap V4 PoolManager: 0x8366a39CC670B4001A1121B8F6A443A643e40951
+- Uniswap V4 PositionManager: 0x58daec3116aae6D93017bAAea7749052E8a04fA7
+- Uniswap V4 Quoter: 0x8dc178EFb8111bB0973dd9d722ebeFF267c98f94
+- Uniswap V4 StateView: 0xF3334192D15450CdD385c8B70e03f9A6bD9E673b
+- Universal Router: 0x8876789976dEcBfCbBbe364623C63652db8C0904
+
+Ink (57073), RPC https://rpc-gel.inkonchain.com, explorer https://explorer.inkonchain.com:
+- DuckHookV4: 0x5a05a1f0A101237D8c350EFfA54f4b3c9bc142cc
+- WETH: 0x4200000000000000000000000000000000000006
+- Uniswap V4 PoolManager: 0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32
+- Uniswap V4 PositionManager: 0x1b35d13a2E2528f192637F14B05f0Dc0e7dEB566
+- Uniswap V4 Quoter: 0x3972C00f7ed4885e145823eb7C655375d275A1C5
+- Uniswap V4 StateView: 0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990
+- Universal Router: 0x112908daC86e20e7241B0927479Ea3Bf935d1fa0
+
+Curated quote tokens (allowed on curve and crowdfund, native-ETH routes configured). Native ETH is address(0).
+- Robinhood: USDG 0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168 (6), U 0xcE24439F2D9C6a2289F741120FE202248B666666 (18), cbBTC 0xCEC185eB182c47d1bA1EFc84e6959e18cd620Be4 (8), TAO 0xf3081494B87e8D5fb7960f066E931D1D0e6E3d67, SPY 0x117cc2133c37B721F49dE2A7a74833232B3B4C0C, QQQ 0xD5f3879160bc7c32ebb4dC785F8a4F505888de68, NVDA 0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC, AAPL 0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9, TSLA 0x322F0929c4625eD5bAd873c95208D54E1c003b2d, GOOGL 0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3, AMZN 0x12f190a9F9d7D37a250758b26824B97CE941bF54, MSFT 0xe93237C50D904957Cf27E7B1133b510C669c2e74, MSTR 0xec262a75e413fAfD0dF80480274532C79D42da09, SPCX 0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa, GME 0x1b0E319c6A659F002271B69dB8A7df2F911c153E, GLD 0xC9a981FEE1F9DEc688bb123ccDeCc63D0deBFC4e (all 18 unless noted)
+- Ink: USDT0 0x0200C29006150606B650577BBE7B6248F58470c1 (6), USDG 0xe343167631d89B6Ffc58B88d6b7fB0228795491D (6), USDC.e 0xF1815bd50389c46847f0Bda824eC8da914045D14 (6), kBTC 0x73E0C0d45E048D25Fc26Fa3159b0aA04BfA4Db98 (8), wSPYx 0xE7E553Cd128F0011777323A0b44a7b96EA1CB540, wNVDAx 0xa8ddb5Cd96b5222AFe198316E9A57CAA642850D5, wAAPLx 0x943BF64D566c32A2Bcd41AC92FB63C111cC9De8f, wTSLAx 0xc3FdBe3A68EE5dE461D30415a8165cf9Aefe1171, wMSTRx 0x30987adF0B11dc698438a99BA04ec3a1AB2c7EaB, wSPCXx 0x8e2eeD8b8B5E13Ea7BF38e50d7821d2C57309072, wNFLXx 0x7d87fD6A379714194a797c0bBB8B40c30D250856 (all 18 unless noted)
+
+## Launching a token
+
+Token address must end in 0x8888 (else VanityAddressRequired). Mine userSalt client-side:
+- initCodeHash = keccak256(0x3d602d80600a3d3981f3363d3d373d3d3d363d73 ++ DuckTokenImpl ++ 0x5af43d82803e903d91602b57fd5bf3)
+- salt = keccak256(abi.encode(address sender, bytes32 userSalt))
+- token = last 20 bytes of keccak256(0xff ++ familyContract ++ salt ++ initCodeHash); try userSalt = 0,1,2... until token & 0xffff == 0x8888 (~65k tries)
+
+Fee fields shared by all families (fixed once the pool registers):
+- hookFeeBps: 0 (=200), 200, 400, 600, 800 or 1000
+- creatorBps + vaultBps + burnBps == 10000 (splits the 70% of each claimed fee left after 25% platform and 5% holders)
+- supplyTier: 0..6 = 1B, 10B, 100B, 1T, 10T, 100T, 1Q (token decimals always 18)
+
+Bonding curve: DuckBondingCurve.createToken((string name, string symbol, uint8 supplyTier, uint256 curveBps, uint256 liquidityBps, address quoteToken, uint256 startVirtualQuote, uint256 migrationTargetQuote, uint256 earlyBuyAmount, uint256 hookFeeBps, uint16 creatorBps, uint16 vaultBps, uint16 burnBps, string metaURI, bytes32 salt)) payable returns (address token)
+- curveBps + liquidityBps == 10000, curveBps >= 3000, liquidityBps >= 1000 (owner-tunable minimums)
+- 0 < startVirtualQuote < migrationTargetQuote, in quote units
+- Native quote: value = creationFee() + optional creator buy. ERC-20 quote: value = creationFee() exactly; earlyBuyAmount pulled via transferFrom (approve first). Quote must be native or quoteTokenAllowed.
+- Transfers are locked to the curve until migration. Emits TokenCreated.
+
+Instant: DuckLauncher.launch((string name, string symbol, string metaURI, address feeWallet, address positionManager, address quoteToken, bytes32 vanitySalt, uint8 supplyTier, uint256 launchMarketCap, uint256 minQuoteOut, uint256 minTokensOut, uint256 hookFeeBps, uint16 creatorBps, uint16 vaultBps, uint16 burnBps, bool revertOnInstantBuyFailure)) payable returns (address token, bytes32 poolId)
+- positionManager = the chain's V4 PositionManager; feeWallet = pool creator (address(0) = sender); any quote token allowed
+- launchMarketCap = opening FDV in quote units; value = launchFee() + optional instant buy in native ETH (routed ETH -> quote -> token). Emits TokenLaunched.
+
+Crowdfund: DuckCrowdfund.launch(string name, string symbol, string metaURI, address dexQuoteAsset, uint256 goal, uint256 startTime, bytes32 vanitySalt, uint256 hookFeeBps, uint16 creatorBps, uint16 vaultBps, uint16 burnBps, uint8 supplyTier) payable returns (uint256 campaignId, address token)
+- value == campaignFee() exactly; deadline = startTime + campaignDuration(); goal in dexQuoteAsset units
+- contribute(campaignId, amount): native campaigns send value; ERC-20 campaigns approve and pass amount with no value
+- After the deadline: finalize(campaignId), then claim(campaignId) on success or claimRefund(campaignId) on a missed goal
+
+## Trading
+
+Before migration (curve token, getTokenConfig(token).migrated == false or API hasPool false):
+- Preview: DuckBondingCurveViews.getAmountOut(token, quoteIn) -> (tokensOut, feeQuote); getAmountOutSell(token, tokensIn) -> (quoteOut, feeQuote)
+- DuckBondingCurve.buy(token, amountIn, minOut, deadline): native quote sends value (amountIn ignored); ERC-20 quote approves the curve, passes amountIn, no value
+- DuckBondingCurve.sell(token, tokensIn, minQuoteOut, deadline) after approving the curve
+- buyWithNative(token, minQuoteOut, minOut, deadline) buys an ERC-20-quoted curve token with ETH
+- 1% curve fee. The buy reaching migrationTarget attempts migration; otherwise anyone may call migrate(token)
+
+With a pool (migrated curve token, instant token, successful crowdfund):
+- PoolKey: currency0 < currency1 by address (native = address(0)), fee 0, tickSpacing 200, hooks = token's hook (API `hook`)
+- Quote: V4Quoter.quoteExactInputSingle((poolKey, bool zeroForOne, uint128 exactAmount, bytes hookData)) -> (amountOut, gasEstimate); includes the hook fee
+- Swap: UniversalRouter.execute(bytes commands = 0x10, bytes[] inputs, uint256 deadline); input = abi.encode(bytes actions = 0x060c0f, bytes[] [swapParams, abi.encode(currencyIn, amountIn), abi.encode(currencyOut, minOut)])
+- swapParams on Ink: abi.encode((poolKey, bool zeroForOne, uint128 amountIn, uint128 amountOutMinimum, bytes hookData))
+- swapParams on Robinhood Chain: abi.encode((poolKey, bool zeroForOne, uint128 amountIn, uint128 amountOutMinimum, uint256 minHopPriceX36, bytes hookData)) -- extra field, pass 0
+- Native input: send value = amountIn. ERC-20 input: approve Permit2, then Permit2.approve(token, UniversalRouter, amount, expiration)
+- Exact-input only (ExactOutputNotSupported). A second swap on the same pool from the same tx.origin in the same block reverts (SameBlockSwap)
+
+## Fees and permissionless triggers
+
+- DuckHookV4.claimFees(bytes32 poolId): pays accruedFees(poolId) as 25% platform, 5% holder rewards, 70% creator/vault/burn. A caller other than the creator receives 1% of the claimed amount (out of the platform share)
+- DuckToken.processBatch(): pays holder rewards; due when distributing() or now >= roundStart() + DISTRIBUTION_INTERVAL() (12h). Up to 500 holders per call. Eligibility: >= 0.25% of total supply; contracts, dead address and PoolManager excluded; weighted by time-held balance
+- DuckVault.triggerBuyback(): when pendingBuyback() > 0, buys and burns the token
+- DuckHookV4.setFeeSplits(poolId, (address wallet, uint16 bps)[]): creator-only, up to 5 wallets summing to 10000, routes only the creator share
+- No LP fee; liquidity is full-range and can't be removed
+
+## REST API
+
+Base https://api.duckfun.family, 120 requests/minute per IP, JSON, errors as { "error": "..." }.
+- GET /{chain}/tokens?family=CURVE|INSTANT|CAMPAIGN&limit&offset
+- GET /{chain}/tokens/{address} (includes pool registration)
+- GET /{chain}/tokens/{address}/trades?limit&offset -> { items: [{ side, quoteAmount, tokenAmount, priceUSD, volumeUSD, trader, timestamp, txHash }], total }
+- GET /{chain}/tokens/{address}/holders?limit&offset -> { items: [{ account, balance }], total }
+- GET /{chain}/campaigns, /{chain}/campaigns/{id}
+- GET /{chain}/portfolio/{wallet}
+- GET /{chain}/price?tokens=addr,addr -> { prices: { addr: usd|null } }
+- POST /{chain}/price/convert { quoteToken, usd } -> { raw, decimals, priceUsd }
+- GET /{chain}/curve | launcher | crowdfund | hook | vault-factory | vault-config | governor-factory | quote-tokens?family= | stats
+- GET /{chain}/vaults, /{chain}/vaults/{token}, /{chain}/governance/proposals?token=, /{chain}/governance/proposals/{id}
+- POST /upload/image (multipart "file"), POST /upload/metadata { name, symbol, description, image, socials } -> { cid, ipfsUri, gatewayUrl }
+
+Token fields: id, family, name, symbol, creator, quoteToken, quoteDecimals, totalSupply, burnedSupply, holderCount, hasPool, poolId, hook, hookFeeBps, migrated, raisedQuote, migrationTarget, lastPrice, lastPriceUsd, marketCapUSD, volume24h, volume24hUsd, volumeAllTimeUsd, priceChange24h, priceChange24hUsd, metaUri, imageUrl, socials, createdAt, campaign. USD fields are null when the quote asset has no reference price. Stablecoins (USDG, U on Robinhood; USDT0, USDC.e, USDG on Ink) are valued at $1.
+
+## Key events
+
+- DuckBondingCurve: TokenCreated(address indexed token, address indexed creator, address quoteToken, uint256 totalSupply, uint256 virtualQuote, uint256 migrationTarget); TokenBought(address indexed token, address indexed buyer, uint256 quoteIn, uint256 tokensOut, uint256 raisedQuote); TokenSold(address indexed token, address indexed seller, uint256 tokensIn, uint256 quoteOut, uint256 raisedQuote); TokenMigrated(address indexed token, bytes32 poolId, uint256 liquidityQuote, uint256 liquidityTokens)
+- DuckLauncher: TokenLaunched(address indexed token, address indexed creator, address indexed positionManager, address quoteToken, address hook, bytes32 poolId)
+- DuckCrowdfund: CampaignCreated(uint256 indexed campaignId, address indexed creator, address indexed token, string name, string symbol, address dexQuoteAsset, uint256 goal, uint256 startTime, uint256 deadline); Contributed; CampaignSucceeded; CampaignFailed; Claimed; Refunded
+- DuckHookV4: PoolRegistered(bytes32 indexed poolId, address indexed token, address indexed creator, uint256 hookFeeBps); FeesClaimed(bytes32 indexed poolId, uint256 amount); BuybackBurned; CTOApplied; CTOApproved
+- Pool swaps: Uniswap V4 PoolManager Swap events for pool ids from PoolRegistered
