@@ -1,0 +1,912 @@
+specVersion: 1.2.0
+description: DuckProtocol on Ink (57073)
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: DuckBondingCurve
+    network: ink
+    source:
+      address: "0xcE71ce995C2A3657aF9bEC45bA1Ee2E8fA2ef5eF"
+      abi: DuckBondingCurve
+      startBlock: 55728270
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Token
+        - Trade
+        - Migration
+        - EmergencyMigration
+        - MigrationFailure
+        - CurveFeeClaim
+        - TokenHourData
+        - QuoteToken
+        - QuotePrice
+        - DiscoveredReferencePool
+        - QuoteDiscovery
+        - AdminEvent
+      abis:
+        - name: DuckBondingCurve
+          file: ./abis/DuckBondingCurve.json
+        - name: DuckToken
+          file: ./abis/DuckToken.json
+        - name: ERC20
+          file: ./abis/ERC20.json
+        - name: UniswapV3Factory
+          file: ./abis/UniswapV3Factory.json
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+        - name: V4StateReader
+          file: ./abis/V4StateReader.json
+      eventHandlers:
+        - event: AllocationBoundsUpdated(uint256,uint256)
+          handler: handleAllocationBoundsUpdated
+        - event: CreationFeeUpdated(uint256,uint256)
+          handler: handleCreationFeeUpdated
+        - event: CurveFeeClaimed(indexed address,indexed address,uint256,uint256)
+          handler: handleCurveFeeClaimed
+        - event: DexConfigUpdated(address,address,address)
+          handler: handleDexConfigUpdated
+        - event: ETHRescued(indexed address,uint256)
+          handler: handleETHRescued
+        - event: EmergencyMigrated(indexed address,indexed address,uint256,uint256)
+          handler: handleEmergencyMigrated
+        - event: FeeSplitsUpdated(indexed address,(address,uint16)[])
+          handler: handleFeeSplitsUpdated
+        - event: ImplUpdated(string,indexed address,indexed address)
+          handler: handleImplUpdated
+        - event: Initialized(uint64)
+          handler: handleInitialized
+        - event: MigrationFailed(indexed address)
+          handler: handleMigrationFailed
+        - event: OwnershipTransferStarted(indexed address,indexed address)
+          handler: handleOwnershipTransferStarted
+        - event: OwnershipTransferred(indexed address,indexed address)
+          handler: handleOwnershipTransferred
+        - event: PlatformTokenUpdated(address)
+          handler: handlePlatformTokenUpdated
+        - event: PlatformWalletUpdated(address)
+          handler: handlePlatformWalletUpdated
+        - event: QuoteTokenUpdated(indexed address,bool)
+          handler: handleQuoteTokenUpdated
+        - event: RouteSucceeded(indexed address,indexed uint256,uint256)
+          handler: handleRouteSucceeded
+        - event: RoutesSet(indexed address,uint256)
+          handler: handleRoutesSet
+        - event: TokenBought(indexed address,indexed address,uint256,uint256,uint256)
+          handler: handleTokenBought
+        - event: TokenCreated(indexed address,indexed address,address,uint256,uint256,uint256)
+          handler: handleTokenCreated
+        - event: TokenMigrated(indexed address,bytes32,uint256,uint256)
+          handler: handleTokenMigrated
+        - event: TokenRegistered(indexed address,indexed address,address,uint256,uint256,uint256)
+          handler: handleTokenRegistered
+        - event: TokenRescued(indexed address,indexed address,uint256)
+          handler: handleTokenRescued
+        - event: TokenSold(indexed address,indexed address,uint256,uint256,uint256)
+          handler: handleTokenSold
+        - event: UniversalRouterUpdated(indexed address)
+          handler: handleUniversalRouterUpdated
+        - event: Upgraded(indexed address)
+          handler: handleUpgraded
+      file: ./src/duck-bonding-curve.ts
+  - kind: ethereum
+    name: DuckLauncher
+    network: ink
+    source:
+      address: "0x5F37c68f9937A0524Cc441b4E1080Ca4F089693B"
+      abi: DuckLauncher
+      startBlock: 55728270
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Token
+        - Launch
+        - QuoteToken
+        - QuotePrice
+        - DiscoveredReferencePool
+        - QuoteDiscovery
+        - AdminEvent
+      abis:
+        - name: DuckLauncher
+          file: ./abis/DuckLauncher.json
+        - name: DuckToken
+          file: ./abis/DuckToken.json
+        - name: ERC20
+          file: ./abis/ERC20.json
+        - name: UniswapV3Factory
+          file: ./abis/UniswapV3Factory.json
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+        - name: V4StateReader
+          file: ./abis/V4StateReader.json
+      eventHandlers:
+        - event: DexAdded(indexed address,address,address)
+          handler: handleDexAdded
+        - event: DexDisabled(indexed address)
+          handler: handleDexDisabled
+        - event: ERC20Rescued(indexed address,indexed address,uint256)
+          handler: handleERC20Rescued
+        - event: ETHRescued(indexed address,uint256)
+          handler: handleETHRescued
+        - event: Initialized(uint64)
+          handler: handleInitialized
+        - event: InstantBuySkipped(indexed address,uint256)
+          handler: handleInstantBuySkipped
+        - event: LaunchFeeSet(uint256)
+          handler: handleLaunchFeeSet
+        - event: OwnershipTransferStarted(indexed address,indexed address)
+          handler: handleOwnershipTransferStarted
+        - event: OwnershipTransferred(indexed address,indexed address)
+          handler: handleOwnershipTransferred
+        - event: PlatformTokenSet(indexed address)
+          handler: handlePlatformTokenSet
+        - event: PlatformWalletSet(indexed address)
+          handler: handlePlatformWalletSet
+        - event: QuoteTokenAdded(indexed address)
+          handler: handleQuoteTokenAdded
+        - event: QuoteTokenDisabled(indexed address)
+          handler: handleQuoteTokenDisabled
+        - event: RouteSucceeded(indexed address,indexed uint256,uint256)
+          handler: handleRouteSucceeded
+        - event: RoutesSet(indexed address,uint256)
+          handler: handleRoutesSet
+        - event: TokenImplSet(indexed address)
+          handler: handleTokenImplSet
+        - event: TokenLaunched(indexed address,indexed address,indexed address,address,address,bytes32)
+          handler: handleTokenLaunched
+        - event: UniversalRouterUpdated(indexed address)
+          handler: handleUniversalRouterUpdated
+        - event: Upgraded(indexed address)
+          handler: handleUpgraded
+        - event: VaultFactorySet(indexed address)
+          handler: handleVaultFactorySet
+      file: ./src/duck-launcher.ts
+  - kind: ethereum
+    name: DuckCrowdfund
+    network: ink
+    source:
+      address: "0xdA868A545aB058D14a70C46CA7760226e7Dcf7b9"
+      abi: DuckCrowdfund
+      startBlock: 55728270
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Token
+        - Campaign
+        - Contribution
+        - Claim
+        - Refund
+        - QuoteToken
+        - QuotePrice
+        - DiscoveredReferencePool
+        - QuoteDiscovery
+        - AdminEvent
+      abis:
+        - name: DuckCrowdfund
+          file: ./abis/DuckCrowdfund.json
+        - name: DuckToken
+          file: ./abis/DuckToken.json
+        - name: ERC20
+          file: ./abis/ERC20.json
+        - name: UniswapV3Factory
+          file: ./abis/UniswapV3Factory.json
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+        - name: V4StateReader
+          file: ./abis/V4StateReader.json
+      eventHandlers:
+        - event: CampaignCreated(indexed uint256,indexed address,indexed address,string,string,address,uint256,uint256,uint256)
+          handler: handleCampaignCreated
+        - event: CampaignDurationSet(uint256)
+          handler: handleCampaignDurationSet
+        - event: CampaignFailed(indexed uint256,uint256,uint256)
+          handler: handleCampaignFailed
+        - event: CampaignFeeSet(uint256)
+          handler: handleCampaignFeeSet
+        - event: CampaignSucceeded(indexed uint256,indexed address,uint256)
+          handler: handleCampaignSucceeded
+        - event: Claimed(indexed uint256,indexed address,uint256)
+          handler: handleClaimed
+        - event: Contributed(indexed uint256,indexed address,uint256)
+          handler: handleContributed
+        - event: DexConfigSet(address,address,address)
+          handler: handleDexConfigSet
+        - event: Initialized(uint64)
+          handler: handleInitialized
+        - event: OwnershipTransferStarted(indexed address,indexed address)
+          handler: handleOwnershipTransferStarted
+        - event: OwnershipTransferred(indexed address,indexed address)
+          handler: handleOwnershipTransferred
+        - event: PlatformTokenSet(indexed address)
+          handler: handlePlatformTokenSet
+        - event: PlatformWalletSet(indexed address)
+          handler: handlePlatformWalletSet
+        - event: QuoteAssetUpdated(indexed address,bool)
+          handler: handleQuoteAssetUpdated
+        - event: Refunded(indexed uint256,indexed address,uint256)
+          handler: handleRefunded
+        - event: RouteSucceeded(indexed address,indexed uint256,uint256)
+          handler: handleRouteSucceeded
+        - event: RoutesSet(indexed address,uint256)
+          handler: handleRoutesSet
+        - event: SupplySplitSet(uint256,uint256)
+          handler: handleSupplySplitSet
+        - event: TokenImplSet(indexed address)
+          handler: handleTokenImplSet
+        - event: UniversalRouterUpdated(indexed address)
+          handler: handleUniversalRouterUpdated
+        - event: Upgraded(indexed address)
+          handler: handleUpgraded
+        - event: VaultFactorySet(indexed address)
+          handler: handleVaultFactorySet
+        - event: WethSet(indexed address)
+          handler: handleWethSet
+      file: ./src/duck-crowdfund.ts
+  - kind: ethereum
+    name: DuckHookV4
+    network: ink
+    source:
+      address: "0x5a05a1f0A101237D8c350EFfA54f4b3c9bc142cc"
+      abi: DuckHookV4
+      startBlock: 55728270
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - PoolRegistration
+        - HookFeeClaim
+        - CTOEvent
+        - HookBuybackBurn
+        - Token
+        - AdminEvent
+      abis:
+        - name: DuckHookV4
+          file: ./abis/DuckHookV4.json
+      eventHandlers:
+        - event: BuybackBurned(indexed bytes32,uint256,uint256)
+          handler: handleBuybackBurned
+        - event: CTOApplied(indexed bytes32,indexed address,address,uint256)
+          handler: handleCTOApplied
+        - event: CTOApproved(indexed bytes32,address)
+          handler: handleCTOApproved
+        - event: CTOFeeSet(uint256)
+          handler: handleCTOFeeSet
+        - event: CTORejected(indexed bytes32,indexed address)
+          handler: handleCTORejected
+        - event: FeeSplitsUpdated(indexed bytes32,(address,uint16)[])
+          handler: handleFeeSplitsUpdated
+        - event: FeesClaimed(indexed bytes32,uint256)
+          handler: handleFeesClaimed
+        - event: HolderRewardSkipped(indexed bytes32,uint256)
+          handler: handleHolderRewardSkipped
+        - event: LauncherAdded(indexed address)
+          handler: handleLauncherAdded
+        - event: LauncherRemoved(indexed address)
+          handler: handleLauncherRemoved
+        - event: OracleDisabledSet(indexed bytes32,bool)
+          handler: handleOracleDisabledSet
+        - event: OraclePausedSet(bool)
+          handler: handleOraclePausedSet
+        - event: OwnershipTransferred(indexed address,indexed address)
+          handler: handleOwnershipTransferred
+        - event: PlatformWalletSet(indexed address)
+          handler: handlePlatformWalletSet
+        - event: PoolRegistered(indexed bytes32,indexed address,indexed address,uint256)
+          handler: handlePoolRegistered
+        - event: StateViewSet(indexed address)
+          handler: handleStateViewSet
+        - event: VaultCutSkipped(indexed bytes32,uint256)
+          handler: handleVaultCutSkipped
+        - event: WethSet(indexed address)
+          handler: handleWethSet
+      file: ./src/duck-hook-v4.ts
+  - kind: ethereum
+    name: PoolManager
+    network: ink
+    source:
+      address: "0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32"
+      abi: PoolManager
+      startBlock: 55728270
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - PoolSwap
+        - Token
+        - TokenHourData
+        - QuoteToken
+        - QuotePrice
+        - DiscoveredReferencePool
+        - QuoteDiscovery
+      abis:
+        - name: PoolManager
+          file: ./abis/PoolManager.json
+        - name: ERC20
+          file: ./abis/ERC20.json
+        - name: UniswapV3Factory
+          file: ./abis/UniswapV3Factory.json
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+        - name: V4StateReader
+          file: ./abis/V4StateReader.json
+      eventHandlers:
+        - event: Swap(indexed bytes32,indexed address,int128,int128,uint160,uint128,int24,uint24)
+          handler: handleSwap
+      file: ./src/pool-manager.ts
+  - kind: ethereum
+    name: DuckVaultFactory
+    network: ink
+    source:
+      address: "0x006e53d079BB4c2010682a4896D1950965faD5A5"
+      abi: DuckVaultFactory
+      startBlock: 55728270
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Vault
+        - AdminEvent
+      abis:
+        - name: DuckVaultFactory
+          file: ./abis/DuckVaultFactory.json
+      eventHandlers:
+        - event: ConfigSet(indexed address)
+          handler: handleConfigSet
+        - event: FamilySet(indexed address,bool)
+          handler: handleFamilySet
+        - event: GovernorFactorySet(indexed address)
+          handler: handleGovernorFactorySet
+        - event: HookSet(indexed address)
+          handler: handleHookSet
+        - event: Initialized(uint64)
+          handler: handleInitialized
+        - event: OwnershipTransferStarted(indexed address,indexed address)
+          handler: handleOwnershipTransferStarted
+        - event: OwnershipTransferred(indexed address,indexed address)
+          handler: handleOwnershipTransferred
+        - event: Upgraded(indexed address)
+          handler: handleUpgraded
+        - event: VaultCreated(indexed address,indexed address,indexed address,address)
+          handler: handleVaultCreated
+        - event: VaultImplApproved(indexed address)
+          handler: handleVaultImplApproved
+        - event: VaultImplRevoked(indexed address)
+          handler: handleVaultImplRevoked
+        - event: VaultImplSet(indexed address)
+          handler: handleVaultImplSet
+      file: ./src/duck-vault-factory.ts
+  - kind: ethereum
+    name: DuckVaultConfig
+    network: ink
+    source:
+      address: "0x2526d694F9b6cCefE46871D1b40aeEc1313eabfB"
+      abi: DuckVaultConfig
+      startBlock: 55728270
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - AdminEvent
+      abis:
+        - name: DuckVaultConfig
+          file: ./abis/DuckVaultConfig.json
+      eventHandlers:
+        - event: BuybackBpsUpdated(uint16)
+          handler: handleBuybackBpsUpdated
+        - event: CloseFactorUpdated(uint16)
+          handler: handleCloseFactorUpdated
+        - event: Initialized(uint64)
+          handler: handleInitialized
+        - event: InterestCurveUpdated(uint16,uint16,uint16,uint16)
+          handler: handleInterestCurveUpdated
+        - event: LiquidationBonusUpdated(uint16)
+          handler: handleLiquidationBonusUpdated
+        - event: LiquidationThresholdUpdated(uint16)
+          handler: handleLiquidationThresholdUpdated
+        - event: MaxBorrowerShareUpdated(uint16)
+          handler: handleMaxBorrowerShareUpdated
+        - event: MaxCirculatingShareUpdated(uint16)
+          handler: handleMaxCirculatingShareUpdated
+        - event: MaxLtvUpdated(uint16)
+          handler: handleMaxLtvUpdated
+        - event: MaxPoolDepthShareUpdated(uint16)
+          handler: handleMaxPoolDepthShareUpdated
+        - event: MaxUtilizationUpdated(uint16)
+          handler: handleMaxUtilizationUpdated
+        - event: MinLoanUpdated(indexed address,uint256)
+          handler: handleMinLoanUpdated
+        - event: MinPoolAgeUpdated(uint32)
+          handler: handleMinPoolAgeUpdated
+        - event: OracleWindowsUpdated(uint32,uint32)
+          handler: handleOracleWindowsUpdated
+        - event: OwnershipTransferStarted(indexed address,indexed address)
+          handler: handleOwnershipTransferStarted
+        - event: OwnershipTransferred(indexed address,indexed address)
+          handler: handleOwnershipTransferred
+        - event: Upgraded(indexed address)
+          handler: handleUpgraded
+      file: ./src/duck-vault-config.ts
+  - kind: ethereum
+    name: DuckTokenGovernorFactory
+    network: ink
+    source:
+      address: "0x29e600073c29b4f646C54c78AeE97aE8AE888999"
+      abi: DuckTokenGovernorFactory
+      startBlock: 55728270
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Governor
+        - Timelock
+        - AdminEvent
+      abis:
+        - name: DuckTokenGovernorFactory
+          file: ./abis/DuckTokenGovernorFactory.json
+      eventHandlers:
+        - event: DefaultVotingParamsSet(uint48,uint32)
+          handler: handleDefaultVotingParamsSet
+        - event: GovernorCreated(indexed address,indexed address,indexed address)
+          handler: handleGovernorCreated
+        - event: GovernorImplSet(indexed address)
+          handler: handleGovernorImplSet
+        - event: Initialized(uint64)
+          handler: handleInitialized
+        - event: OwnershipTransferStarted(indexed address,indexed address)
+          handler: handleOwnershipTransferStarted
+        - event: OwnershipTransferred(indexed address,indexed address)
+          handler: handleOwnershipTransferred
+        - event: TimelockCreated(indexed address,indexed address)
+          handler: handleTimelockCreated
+        - event: TimelockImplSet(indexed address)
+          handler: handleTimelockImplSet
+        - event: Upgraded(indexed address)
+          handler: handleUpgraded
+      file: ./src/duck-token-governor-factory.ts
+  - kind: ethereum
+    name: PriceReference0 # ETH (ETH_STABLE)
+    network: ink
+    source:
+      address: "0x356667da30c89cc36c65d394500424d5eba8731c"
+      abi: UniswapV3Pool
+      startBlock: 55628270
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - QuotePrice
+        - EthReferencePool
+        - DiscoveredReferencePool
+      abis:
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+      eventHandlers:
+        - event: Swap(indexed address,indexed address,int256,int256,uint160,uint128,int24)
+          handler: handleSwap
+      file: ./src/ref-pool.ts
+  - kind: ethereum
+    name: PriceReference1 # ETH (ETH_STABLE)
+    network: ink
+    source:
+      address: "0x5a56ff4b88f0ff5b33d4b0cf541fe76daf343e46"
+      abi: UniswapV3Pool
+      startBlock: 55628270
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - QuotePrice
+        - EthReferencePool
+        - DiscoveredReferencePool
+      abis:
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+      eventHandlers:
+        - event: Swap(indexed address,indexed address,int256,int256,uint160,uint128,int24)
+          handler: handleSwap
+      file: ./src/ref-pool.ts
+  - kind: ethereum
+    name: PriceReference2 # BTC (TOKEN_STABLE)
+    network: ink
+    source:
+      address: "0x6ab98b2e11a3cadb7021c390b9011b6a7c03cdfe"
+      abi: UniswapV3Pool
+      startBlock: 55628270
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - QuotePrice
+        - EthReferencePool
+        - DiscoveredReferencePool
+      abis:
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+      eventHandlers:
+        - event: Swap(indexed address,indexed address,int256,int256,uint160,uint128,int24)
+          handler: handleSwap
+      file: ./src/ref-pool.ts
+  - kind: ethereum
+    name: PriceReference3 # NVDAw (TOKEN_STABLE)
+    network: ink
+    source:
+      address: "0x01951ddb43a451500bfaf652d40c07309fad4727"
+      abi: UniswapV3Pool
+      startBlock: 55628270
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - QuotePrice
+        - EthReferencePool
+        - DiscoveredReferencePool
+      abis:
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+      eventHandlers:
+        - event: Swap(indexed address,indexed address,int256,int256,uint160,uint128,int24)
+          handler: handleSwap
+      file: ./src/ref-pool.ts
+  - kind: ethereum
+    name: PriceReference4 # MSTRw (TOKEN_STABLE)
+    network: ink
+    source:
+      address: "0x169f2ab4d25aba4f9b2743658f8549641c9d069d"
+      abi: UniswapV3Pool
+      startBlock: 55628270
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - QuotePrice
+        - EthReferencePool
+        - DiscoveredReferencePool
+      abis:
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+      eventHandlers:
+        - event: Swap(indexed address,indexed address,int256,int256,uint160,uint128,int24)
+          handler: handleSwap
+      file: ./src/ref-pool.ts
+  - kind: ethereum
+    name: PriceReference5 # SPYw (TOKEN_STABLE)
+    network: ink
+    source:
+      address: "0x06fb000fe9c6505eb3b2cdf52445d8c7d5690f47"
+      abi: UniswapV3Pool
+      startBlock: 55628270
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - QuotePrice
+        - EthReferencePool
+        - DiscoveredReferencePool
+      abis:
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+      eventHandlers:
+        - event: Swap(indexed address,indexed address,int256,int256,uint160,uint128,int24)
+          handler: handleSwap
+      file: ./src/ref-pool.ts
+  - kind: ethereum
+    name: PriceReference6 # SPCXw (TOKEN_STABLE)
+    network: ink
+    source:
+      address: "0xdf1531451f6d97f847b27fac671738d113db1406"
+      abi: UniswapV3Pool
+      startBlock: 55628270
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - QuotePrice
+        - EthReferencePool
+        - DiscoveredReferencePool
+      abis:
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+      eventHandlers:
+        - event: Swap(indexed address,indexed address,int256,int256,uint160,uint128,int24)
+          handler: handleSwap
+      file: ./src/ref-pool.ts
+  - kind: ethereum
+    name: PriceReference7 # AAPLw (TOKEN_STABLE)
+    network: ink
+    source:
+      address: "0x8986bb68391ad5b0afd7605e8075b273ca0189d6"
+      abi: UniswapV3Pool
+      startBlock: 55628270
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - QuotePrice
+        - EthReferencePool
+        - DiscoveredReferencePool
+      abis:
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+      eventHandlers:
+        - event: Swap(indexed address,indexed address,int256,int256,uint160,uint128,int24)
+          handler: handleSwap
+      file: ./src/ref-pool.ts
+  - kind: ethereum
+    name: PriceReference8 # NFLXw (TOKEN_STABLE)
+    network: ink
+    source:
+      address: "0x111d25ac72ad434d895f6f1ac8184ab5175e99ff"
+      abi: UniswapV3Pool
+      startBlock: 55628270
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - QuotePrice
+        - EthReferencePool
+        - DiscoveredReferencePool
+      abis:
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+      eventHandlers:
+        - event: Swap(indexed address,indexed address,int256,int256,uint160,uint128,int24)
+          handler: handleSwap
+      file: ./src/ref-pool.ts
+  - kind: ethereum
+    name: PriceReference9 # TSLAw (TOKEN_STABLE)
+    network: ink
+    source:
+      address: "0x09444cbdff5cd4437150a1f26865a3ed85d8ed5e"
+      abi: UniswapV3Pool
+      startBlock: 55628270
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - QuotePrice
+        - EthReferencePool
+        - DiscoveredReferencePool
+      abis:
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+      eventHandlers:
+        - event: Swap(indexed address,indexed address,int256,int256,uint160,uint128,int24)
+          handler: handleSwap
+      file: ./src/ref-pool.ts
+
+templates:
+  - kind: ethereum
+    name: DuckToken
+    network: ink
+    source:
+      abi: DuckToken
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Token
+        - Holder
+        - HolderRewardDeposit
+        - HolderRewardRound
+        - HolderRewardPayout
+        - AdminEvent
+      abis:
+        - name: DuckToken
+          file: ./abis/DuckToken.json
+      eventHandlers:
+        - event: Approval(indexed address,indexed address,uint256)
+          handler: handleApproval
+        - event: DelegateChanged(indexed address,indexed address,indexed address)
+          handler: handleDelegateChanged
+        - event: DelegateVotesChanged(indexed address,uint256,uint256)
+          handler: handleDelegateVotesChanged
+        - event: DistributionRoundClosed(indexed uint256,uint256,uint256,uint256)
+          handler: handleDistributionRoundClosed
+        - event: DistributionRoundFinished(indexed uint256)
+          handler: handleDistributionRoundFinished
+        - event: EIP712DomainChanged()
+          handler: handleEIP712DomainChanged
+        - event: HolderRewardDeposited(uint256)
+          handler: handleHolderRewardDeposited
+        - event: HolderRewardPaid(indexed address,uint256)
+          handler: handleHolderRewardPaid
+        - event: Initialized(uint64)
+          handler: handleInitialized
+        - event: MetaURISet(string)
+          handler: handleMetaURISet
+        - event: OwnershipTransferred(indexed address,indexed address)
+          handler: handleOwnershipTransferred
+        - event: RewardConfigSet(indexed address,indexed address,indexed address)
+          handler: handleRewardConfigSet
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleTransfer
+        - event: VaultSet(indexed address)
+          handler: handleVaultSet
+      file: ./src/duck-token.ts
+
+  - kind: ethereum
+    name: DuckVault
+    network: ink
+    source:
+      abi: DuckVault
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Vault
+        - VaultDeposit
+        - VaultBorrow
+        - VaultRepayment
+        - VaultCollateralChange
+        - VaultLiquidation
+        - VaultBadDebt
+        - VaultBuybackQueued
+        - VaultBuybackExecuted
+        - VaultWithdrawal
+        - AdminEvent
+      abis:
+        - name: DuckVault
+          file: ./abis/DuckVault.json
+      eventHandlers:
+        - event: BadDebtRealized(indexed address,uint256)
+          handler: handleBadDebtRealized
+        - event: Borrowed(indexed address,uint256,uint256)
+          handler: handleBorrowed
+        - event: BuybackExecuted(uint256,uint256)
+          handler: handleBuybackExecuted
+        - event: BuybackQueued(uint256)
+          handler: handleBuybackQueued
+        - event: CollateralAdded(indexed address,uint256)
+          handler: handleCollateralAdded
+        - event: CollateralWithdrawn(indexed address,uint256)
+          handler: handleCollateralWithdrawn
+        - event: CreatorSet(indexed address)
+          handler: handleCreatorSet
+        - event: Deposited(indexed address,uint256)
+          handler: handleDeposited
+        - event: Enabled(bool)
+          handler: handleEnabled
+        - event: GovernorSet(indexed address)
+          handler: handleGovernorSet
+        - event: Initialized(uint64)
+          handler: handleInitialized
+        - event: Liquidated(indexed address,indexed address,uint256,uint256)
+          handler: handleLiquidated
+        - event: PoolLinked(indexed address,indexed bytes32)
+          handler: handlePoolLinked
+        - event: Repaid(indexed address,uint256,uint256)
+          handler: handleRepaid
+        - event: RouteSucceeded(indexed address,indexed uint256,uint256)
+          handler: handleRouteSucceeded
+        - event: RoutesSet(indexed address,uint256)
+          handler: handleRoutesSet
+        - event: UniversalRouterUpdated(indexed address)
+          handler: handleUniversalRouterUpdated
+        - event: Upgraded(indexed address)
+          handler: handleUpgraded
+        - event: Withdrawn(indexed address,uint256)
+          handler: handleWithdrawn
+      file: ./src/duck-vault.ts
+
+  - kind: ethereum
+    name: DuckTokenGovernor
+    network: ink
+    source:
+      abi: DuckTokenGovernor
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Proposal
+        - Vote
+        - AdminEvent
+      abis:
+        - name: DuckTokenGovernor
+          file: ./abis/DuckTokenGovernor.json
+      eventHandlers:
+        - event: EIP712DomainChanged()
+          handler: handleEIP712DomainChanged
+        - event: Initialized(uint64)
+          handler: handleInitialized
+        - event: ProposalCanceled(uint256)
+          handler: handleProposalCanceled
+        - event: ProposalCreated(uint256,address,address[],uint256[],string[],bytes[],uint256,uint256,string)
+          handler: handleProposalCreated
+        - event: ProposalExecuted(uint256)
+          handler: handleProposalExecuted
+        - event: ProposalQueued(uint256,uint256)
+          handler: handleProposalQueued
+        - event: ProposalThresholdSet(uint256,uint256)
+          handler: handleProposalThresholdSet
+        - event: TimelockChange(address,address)
+          handler: handleTimelockChange
+        - event: VoteCast(indexed address,uint256,uint8,uint256,string)
+          handler: handleVoteCast
+        - event: VoteCastWithParams(indexed address,uint256,uint8,uint256,string,bytes)
+          handler: handleVoteCastWithParams
+        - event: VotingDelaySet(uint256,uint256)
+          handler: handleVotingDelaySet
+        - event: VotingPeriodSet(uint256,uint256)
+          handler: handleVotingPeriodSet
+      file: ./src/duck-token-governor.ts
+
+  - kind: ethereum
+    name: TimelockControllerUpgradeable
+    network: ink
+    source:
+      abi: TimelockControllerUpgradeable
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - TimelockOperation
+        - AdminEvent
+      abis:
+        - name: TimelockControllerUpgradeable
+          file: ./abis/TimelockControllerUpgradeable.json
+      eventHandlers:
+        - event: CallExecuted(indexed bytes32,indexed uint256,address,uint256,bytes)
+          handler: handleCallExecuted
+        - event: CallSalt(indexed bytes32,bytes32)
+          handler: handleCallSalt
+        - event: CallScheduled(indexed bytes32,indexed uint256,address,uint256,bytes,bytes32,uint256)
+          handler: handleCallScheduled
+        - event: Cancelled(indexed bytes32)
+          handler: handleCancelled
+        - event: Initialized(uint64)
+          handler: handleInitialized
+        - event: MinDelayChange(uint256,uint256)
+          handler: handleMinDelayChange
+        - event: RoleAdminChanged(indexed bytes32,indexed bytes32,indexed bytes32)
+          handler: handleRoleAdminChanged
+        - event: RoleGranted(indexed bytes32,indexed address,indexed address)
+          handler: handleRoleGranted
+        - event: RoleRevoked(indexed bytes32,indexed address,indexed address)
+          handler: handleRoleRevoked
+      file: ./src/timelock-controller.ts
+
+  - kind: ethereum
+    name: DiscoveredV3Pool
+    network: ink
+    source:
+      abi: UniswapV3Pool
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - QuotePrice
+        - DiscoveredReferencePool
+      abis:
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+      eventHandlers:
+        - event: Swap(indexed address,indexed address,int256,int256,uint160,uint128,int24)
+          handler: handleSwap
+      file: ./src/ref-pool.ts

@@ -1,0 +1,564 @@
+enum TokenFamily {
+  BondingCurve
+  Launcher
+  Crowdfund
+}
+
+# Decimals for an ERC20 quote token, read once from the token and cached. Native ETH (address(0))
+# is never stored: it is always 18 decimals.
+type QuoteToken @entity(immutable: false) {
+  id: Bytes!
+  decimals: Int!
+  symbol: String
+}
+
+# Reference USD price of a quote token. Stablecoins are $1 and never stored. ETH is stored under both
+# address(0) and the wrapped native token. Tokens priced against ETH store priceETH, and their USD value
+# is priceETH x the current ETH price, so it never goes stale when only ETH moves.
+enum PriceOrigin {
+  CURATED # reference pool chosen from the liquidity scan
+  DISCOVERED # found at runtime for a quote token with no curated reference; no minimum depth
+}
+
+type QuotePrice @entity(immutable: false) {
+  id: Bytes! # token address
+  priceUSD: BigDecimal
+  priceETH: BigDecimal
+  source: Bytes! # reference pool address, or v4 poolId
+  origin: PriceOrigin!
+  depthUSD: BigDecimal # DISCOVERED only: USD on the pool's ETH/stablecoin side when it was chosen
+  updatedAt: BigInt!
+  updatedAtBlock: BigInt!
+}
+
+# Latest price and in-range liquidity of each ETH/stablecoin reference pool; ETH/USD is their
+# liquidity-weighted average.
+# A reference pool found at runtime for a quote token with no curated reference (in practice an
+# arbitrary token picked in the launcher).
+type DiscoveredReferencePool @entity(immutable: false) {
+  id: Bytes! # v3 pool address, or v4 poolId
+  isV4: Boolean!
+  token: Bytes!
+  kind: Int! # 1 = priced against ETH, 2 = priced against a $1 stablecoin
+  pricedIsToken0: Boolean!
+  dec0: Int!
+  dec1: Int!
+  depthUSD: BigDecimal
+  discoveredAt: BigInt!
+  discoveredAtBlock: BigInt!
+}
+
+# Discovery attempts per quote token, so a token with no pool is retried at most every 6 hours.
+type QuoteDiscovery @entity(immutable: false) {
+  id: Bytes! # quote token
+  found: Boolean!
+  attempts: Int!
+  lastAttemptAt: BigInt!
+  pool: Bytes
+}
+
+type EthReferencePool @entity(immutable: false) {
+  id: Bytes! # pool address
+  priceUSD: BigDecimal!
+  liquidity: BigInt!
+  updatedAt: BigInt!
+}
+
+type Token @entity(immutable: false) {
+  id: Bytes! # token address
+  family: TokenFamily!
+  creator: Bytes!
+  name: String
+  symbol: String
+  decimals: Int!
+  metaUri: String
+  quoteToken: Bytes # address(0) = native ETH
+  totalSupply: BigInt
+  burnedSupply: BigInt!
+  # True once the token trades in its own Uniswap v4 pool: immediately for launcher tokens, after
+  # migration for bonding-curve tokens, after a successful raise for crowdfund tokens.
+  hasPool: Boolean!
+  # Bonding-curve tokens only: the curve completed and liquidity moved to the pool.
+  migrated: Boolean!
+  poolId: Bytes
+  hook: Bytes
+  hookFeeBps: BigInt
+  positionManager: Bytes
+  # Curve-phase fields (BondingCurve family only).
+  virtualQuote: BigInt
+  migrationTarget: BigInt
+  raisedQuote: BigInt
+  bcTokensSold: BigInt
+  # Quote units per token, decimal-adjusted; USD conversion is left to consumers.
+  lastPrice: BigDecimal
+  lastTradeAt: BigInt
+  volumeAllTime: BigInt! # raw quote units
+  # USD values use the quote token's reference price at trade time; null while it has none.
+  lastPriceUSD: BigDecimal
+  marketCapUSD: BigDecimal # lastPriceUSD x (totalSupply - burnedSupply)
+  volumeUSDAllTime: BigDecimal!
+  holderCount: Int!
+  holders: [Holder!]! @derivedFrom(field: "token")
+  vault: Vault @derivedFrom(field: "token")
+  campaign: Campaign @derivedFrom(field: "token")
+  launch: Launch @derivedFrom(field: "token")
+  # Holder rewards: config is fixed when the token's pool is created.
+  rewardHook: Bytes
+  rewardCurrency: Bytes
+  # Round currently being paid out in batches (between DistributionRoundClosed and
+  # DistributionRoundFinished); HolderRewardPaid carries no round id, so payouts attach to this.
+  activeRewardRound: HolderRewardRound
+  rewardRounds: [HolderRewardRound!]! @derivedFrom(field: "token")
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+  createdAtTx: Bytes!
+}
+
+type Holder @entity(immutable: false) {
+  id: String! # token address + "-" + account address
+  token: Token!
+  account: Bytes!
+  balance: BigInt!
+  updatedAt: BigInt!
+  updatedAtBlock: BigInt!
+}
+
+type TokenHourData @entity(immutable: false) {
+  id: String! # token address + "-" + floor(timestamp / 3600)
+  token: Token!
+  hourStartUnix: BigInt!
+  volumeQuote: BigInt!
+  volumeUSD: BigDecimal!
+  closePrice: BigDecimal # lastPrice after the hour's latest trade
+  closePriceUSD: BigDecimal
+}
+
+# Bonding-curve trades (before migration).
+type Trade @entity(immutable: true) {
+  id: Bytes!
+  token: Token!
+  trader: Bytes!
+  isBuy: Boolean!
+  quoteAmount: BigInt!
+  tokenAmount: BigInt!
+  raisedQuote: BigInt
+  priceUSD: BigDecimal
+  volumeUSD: BigDecimal
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+# Swaps in a token's own v4 pool (after it has one).
+type PoolSwap @entity(immutable: true) {
+  id: Bytes!
+  token: Token!
+  trader: Bytes!
+  isBuy: Boolean!
+  quoteAmount: BigInt!
+  tokenAmount: BigInt!
+  priceUSD: BigDecimal
+  volumeUSD: BigDecimal
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type Migration @entity(immutable: true) {
+  id: Bytes!
+  token: Token!
+  poolId: Bytes!
+  liquidityQuote: BigInt!
+  liquidityTokens: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type EmergencyMigration @entity(immutable: true) {
+  id: Bytes!
+  token: Token!
+  to: Bytes!
+  quoteAmount: BigInt!
+  tokenAmount: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type MigrationFailure @entity(immutable: true) {
+  id: Bytes!
+  token: Token!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type CurveFeeClaim @entity(immutable: true) {
+  id: Bytes!
+  token: Token!
+  creator: Bytes!
+  creatorAmount: BigInt!
+  platformAmount: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type Launch @entity(immutable: true) {
+  id: Bytes! # token address
+  token: Token!
+  creator: Bytes!
+  positionManager: Bytes!
+  quoteToken: Bytes!
+  hook: Bytes!
+  poolId: Bytes!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type Campaign @entity(immutable: false) {
+  id: String! # crowdfund address + "-" + campaignId
+  campaignId: BigInt!
+  creator: Bytes!
+  token: Token
+  name: String!
+  symbol: String!
+  dexQuoteAsset: Bytes!
+  goal: BigInt!
+  startTime: BigInt!
+  deadline: BigInt!
+  totalRaised: BigInt!
+  finalized: Boolean!
+  succeeded: Boolean!
+  # Fixed at launch and never re-emitted; read once via getCampaignMeta. Null if that call reverts.
+  metaUri: String
+  totalSupply: BigInt
+  contributorBps: BigInt
+  lpBps: BigInt
+  hookFeeBps: BigInt
+  vaultBps: Int
+  contributions: [Contribution!]! @derivedFrom(field: "campaign")
+  claims: [Claim!]! @derivedFrom(field: "campaign")
+  refunds: [Refund!]! @derivedFrom(field: "campaign")
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+  createdAtTx: Bytes!
+}
+
+type Contribution @entity(immutable: true) {
+  id: Bytes!
+  campaign: Campaign!
+  contributor: Bytes!
+  amount: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type Claim @entity(immutable: true) {
+  id: Bytes!
+  campaign: Campaign!
+  contributor: Bytes!
+  amount: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type Refund @entity(immutable: true) {
+  id: Bytes!
+  campaign: Campaign!
+  contributor: Bytes!
+  amount: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type PoolRegistration @entity(immutable: true) {
+  id: Bytes! # poolId
+  poolId: Bytes!
+  token: Token!
+  creator: Bytes!
+  hook: Bytes!
+  hookFeeBps: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type HookFeeClaim @entity(immutable: true) {
+  id: Bytes!
+  poolId: Bytes!
+  token: Token
+  amount: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+enum CTOEventType {
+  Applied
+  Approved
+  Rejected
+}
+
+type CTOEvent @entity(immutable: true) {
+  id: Bytes!
+  type: CTOEventType!
+  poolId: Bytes!
+  token: Token
+  applicant: Bytes
+  newCreator: Bytes
+  paid: BigInt
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type HookBuybackBurn @entity(immutable: true) {
+  id: Bytes!
+  poolId: Bytes!
+  token: Token
+  quoteSpent: BigInt!
+  tokensBurned: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type HolderRewardDeposit @entity(immutable: true) {
+  id: Bytes!
+  token: Token!
+  amount: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type HolderRewardRound @entity(immutable: false) {
+  id: String! # token address + "-" + roundStart
+  token: Token!
+  roundStart: BigInt!
+  pool: BigInt!
+  eligibleCount: BigInt!
+  totalWeight: BigInt!
+  finished: Boolean!
+  totalPaid: BigInt!
+  payouts: [HolderRewardPayout!]! @derivedFrom(field: "round")
+  closedAtBlock: BigInt!
+  closedAtTimestamp: BigInt!
+  closedAtTx: Bytes!
+  finishedAtBlock: BigInt
+  finishedAtTimestamp: BigInt
+  finishedAtTx: Bytes
+}
+
+type HolderRewardPayout @entity(immutable: true) {
+  id: Bytes!
+  token: Token!
+  round: HolderRewardRound
+  account: Bytes!
+  amount: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type Vault @entity(immutable: false) {
+  id: Bytes! # vault address
+  token: Token!
+  family: Bytes!
+  creator: Bytes!
+  governor: Bytes
+  currency: Bytes
+  poolId: Bytes
+  enabled: Boolean!
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+  createdAtTx: Bytes!
+}
+
+type VaultDeposit @entity(immutable: true) {
+  id: Bytes!
+  vault: Vault!
+  from: Bytes!
+  amount: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type VaultBorrow @entity(immutable: true) {
+  id: Bytes!
+  vault: Vault!
+  borrower: Bytes!
+  amount: BigInt!
+  newDebt: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type VaultRepayment @entity(immutable: true) {
+  id: Bytes!
+  vault: Vault!
+  borrower: Bytes!
+  amount: BigInt!
+  remainingDebt: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type VaultCollateralChange @entity(immutable: true) {
+  id: Bytes!
+  vault: Vault!
+  borrower: Bytes!
+  isAdd: Boolean!
+  amount: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type VaultLiquidation @entity(immutable: true) {
+  id: Bytes!
+  vault: Vault!
+  borrower: Bytes!
+  liquidator: Bytes!
+  repaid: BigInt!
+  seized: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type VaultBadDebt @entity(immutable: true) {
+  id: Bytes!
+  vault: Vault!
+  borrower: Bytes!
+  amount: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type VaultBuybackQueued @entity(immutable: true) {
+  id: Bytes!
+  vault: Vault!
+  amount: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type VaultBuybackExecuted @entity(immutable: true) {
+  id: Bytes!
+  vault: Vault!
+  currencyIn: BigInt!
+  tokensBurned: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type VaultWithdrawal @entity(immutable: true) {
+  id: Bytes!
+  vault: Vault!
+  to: Bytes!
+  amount: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type Governor @entity(immutable: false) {
+  id: Bytes! # governor address
+  vault: Vault!
+  creator: Bytes!
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+  createdAtTx: Bytes!
+}
+
+type Timelock @entity(immutable: false) {
+  id: Bytes! # timelock address
+  vault: Vault!
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+  createdAtTx: Bytes!
+}
+
+type Proposal @entity(immutable: false) {
+  id: String! # governor address + "-" + proposalId
+  governor: Governor!
+  proposalId: BigInt!
+  proposer: Bytes
+  targets: [Bytes!]
+  values: [BigInt!]
+  signatures: [String!]
+  calldatas: [Bytes!]
+  voteStart: BigInt
+  voteEnd: BigInt
+  description: String
+  etaSeconds: BigInt
+  canceled: Boolean!
+  queued: Boolean!
+  executed: Boolean!
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+  createdAtTx: Bytes!
+}
+
+type Vote @entity(immutable: true) {
+  id: Bytes!
+  governor: Governor!
+  proposal: Proposal!
+  voter: Bytes!
+  support: Int!
+  weight: BigInt!
+  reason: String
+  params: Bytes
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
+
+type TimelockOperation @entity(immutable: false) {
+  id: String! # timelock address + "-" + operation id + "-" + index
+  timelock: Timelock!
+  operationId: Bytes!
+  index: BigInt!
+  target: Bytes
+  value: BigInt
+  data: Bytes
+  predecessor: Bytes
+  delay: BigInt
+  executed: Boolean!
+  cancelled: Boolean!
+  scheduledAtBlock: BigInt
+  scheduledAtTimestamp: BigInt
+  scheduledAtTx: Bytes
+  executedAtBlock: BigInt
+  executedAtTimestamp: BigInt
+  executedAtTx: Bytes
+}
+
+# Every config/admin/boilerplate event (owner setters, Initialized, Upgraded, ownership and role
+# changes, ...) in one uniform shape, queryable by contract and event name.
+type AdminEvent @entity(immutable: true) {
+  id: Bytes!
+  contractAddress: Bytes!
+  contractName: String!
+  eventName: String!
+  param0: String
+  param1: String
+  param2: String
+  param3: String
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
