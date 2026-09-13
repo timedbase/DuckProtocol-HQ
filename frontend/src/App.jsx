@@ -1194,8 +1194,8 @@ export default function App() {
         <header style={cs("position:sticky;top:0;z-index:40;background:rgba(23,23,23,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)")}>
           <div style={cs(`display:flex;align-items:center;gap:${m ? "10px" : "22px"};padding:0 ${m ? "12px" : "24px"};min-height:${m ? "52px" : "58px"};max-width:1320px;margin:0 auto;width:100%;box-sizing:border-box`)}>
             <div onClick={v.goHome} style={cs("display:flex;align-items:center;gap:9px;cursor:pointer;flex:none")}>
-              <img src="/duckfun-logo.png" alt="duckfun" style={cs(`width:${m ? "24px" : "26px"};height:${m ? "24px" : "26px"};object-fit:contain;display:block`)} />
-              {!m && <span style={cs("font-size:15.5px;font-weight:600;letter-spacing:-.02em")}>duckfun</span>}
+              <img src="/duckfun-logo.png" alt="duckpad" style={cs(`width:${m ? "24px" : "26px"};height:${m ? "24px" : "26px"};object-fit:contain;display:block`)} />
+              <span style={cs(`font-size:${m ? "14.5px" : "15.5px"};font-weight:600;letter-spacing:-.02em;white-space:nowrap`)}>duckpad</span>
             </div>
             <div style={cs("flex:1;min-width:0")}></div>
             {v.isHome && !m && (
@@ -1262,13 +1262,13 @@ export default function App() {
           {m ? v.chainName.toUpperCase() : v.chainName} {v.chainId}{v.health.frontendMs != null && ` · ${v.health.frontendMs}ms`}
         </span>
         <div style={cs("margin-left:auto;display:flex;gap:6px")}>
-          <a href="https://docs.duckfun.family" target="_blank" rel="noreferrer" title="Docs" style={cs("width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)")}>
+          <a href="https://docs.duckpad.fun" target="_blank" rel="noreferrer" title="Docs" style={cs("width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)")}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v4h4" /><path d="M9 12h6M9 16h6" /></svg>
           </a>
-          <a href="https://x.com/duckfunfamily" target="_blank" rel="noreferrer" title="duckfun on X" style={cs("width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)")}>
+          <a href="https://x.com/duckfunfamily" target="_blank" rel="noreferrer" title="duckpad on X" style={cs("width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)")}>
             <XIcon />
           </a>
-          <a href="https://t.me/DuckFunFamily" target="_blank" rel="noreferrer" title="duckfun on Telegram" style={cs("width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)")}>
+          <a href="https://t.me/DuckFunFamily" target="_blank" rel="noreferrer" title="duckpad on Telegram" style={cs("width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)")}>
             <TelegramIcon />
           </a>
         </div>
@@ -1379,8 +1379,9 @@ function buildViewModel(ctx) {
   // hand-maintained frontend constant that had no path to ever get set once
   // the backend's own address was configured, so the hero card kept
   // showing "not launched yet" even after $DUCK was real and verified.
-  // DiscoverPage renders that "not launched yet" card whenever this is
-  // null instead of hiding the slot entirely.
+  // kingCoin stays null until a live token matches the backend's configured
+  // $DUCK address, and DiscoverPage hides the King of Ducks card entirely
+  // until then.
   const duckCoin = s.coins.find((x) => x.verified);
   const kingCoin = duckCoin ? { ...shape(duckCoin), mcapLabel: usdOrQuote(duckCoin.mcUsd, duckCoin.mc, duckCoin.quote) } : null;
   const duckLaunched = !!duckCoin;

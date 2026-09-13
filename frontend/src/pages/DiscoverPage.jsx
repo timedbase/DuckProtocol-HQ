@@ -96,7 +96,7 @@ function SocialRow({ socials, size = "22px" }) {
 // one.
 function TheDuckCard({ v }) {
   const t = v.kingCoin;
-  if (!t) return <DuckComingSoonCard v={v} />;
+  if (!t) return null;
   const hasSocials = t.socials?.twitter || t.socials?.telegram || t.socials?.website;
   return (
     <div onClick={t.open} className="d-lift" style={cs("position:relative;flex:1;min-width:320px;cursor:pointer;display:flex;border:1px solid rgba(163,230,53,.35);border-radius:10px;overflow:hidden;background:radial-gradient(130% 150% at 0% 0%,rgba(163,230,53,.16),transparent 60%),var(--card);box-shadow:var(--sh),0 0 0 1px rgba(163,230,53,.06)")}>
@@ -143,33 +143,6 @@ function TheDuckCard({ v }) {
         ) : (
           <div style={cs("height:1px;background:linear-gradient(90deg,rgba(163,230,53,.35),transparent)")}></div>
         )}
-      </div>
-    </div>
-  );
-}
-
-// Before $DUCK actually launches on-chain (no verified token in v.coins
-// yet -- see the backend's DUCK_TOKEN_ADDRESS env var and App.jsx's
-// duckCoin lookup), the hero slot stays put rather than disappearing: same
-// visual language, honest "not launched yet" state instead of stats that
-// don't exist yet, and no click-through since there's no token page to
-// open.
-function DuckComingSoonCard({ v }) {
-  return (
-    <div className="d-lift" style={cs("position:relative;flex:1;min-width:300px;display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:radial-gradient(120% 140% at 0% 0%,rgba(163,230,53,.13),transparent 60%),var(--card);box-shadow:var(--sh)")}>
-      <div style={cs("width:128px;flex:none;position:relative;background:var(--paper);display:flex;align-items:center;justify-content:center")}>
-        <span style={cs("font-size:34px;font-weight:700;letter-spacing:-.03em;color:var(--mute)")}>🦆</span>
-      </div>
-      <div style={cs("flex:1;min-width:0;padding:16px 18px;display:flex;flex-direction:column;gap:8px;justify-content:center")}>
-        <div style={cs("display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.16em;color:var(--lime)")}>
-          <CrownIcon size={11} />
-          KING OF DUCKS
-        </div>
-        <div style={cs("display:flex;align-items:baseline;gap:8px;min-width:0")}>
-          <span style={cs("font-size:21px;font-weight:700;letter-spacing:-.03em;flex:none")}>$DUCK</span>
-          <span style={cs("font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--mute)")}>The Duck</span>
-        </div>
-        <div style={cs("font-size:12.5px;color:var(--mute);line-height:1.5;max-width:34ch")}>Not launched yet -- this slot is reserved for the platform's own token.</div>
       </div>
     </div>
   );
@@ -266,7 +239,7 @@ export default function DiscoverPage({ v }) {
 
       <div style={cs(`display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px`)}>
         <IntroCard v={v} />
-        <TheDuckCard v={v} />
+        {v.kingCoin && <TheDuckCard v={v} />}
       </div>
 
       <div style={cs("border:1px solid var(--line);border-radius:10px;background:var(--card);padding:10px;display:flex;flex-direction:column;gap:10px;margin-bottom:16px")}>

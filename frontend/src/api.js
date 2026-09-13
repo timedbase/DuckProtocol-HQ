@@ -3,7 +3,7 @@
 // for local development.
 import { ZERO_ADDRESS } from "./chain/addresses.js";
 
-export const API_BASE = import.meta.env.VITE_API_URL || "https://api.duckfun.family";
+export const API_BASE = import.meta.env.VITE_API_URL || "https://api.duckpad.fun";
 
 const quoteSymbolTables = new Map();
 function quoteSymbolTable(chain) {

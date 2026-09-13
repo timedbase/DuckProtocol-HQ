@@ -1,4 +1,4 @@
-# duckfun.family backend
+# duckpad.fun backend
 
 A small Express API (Node/TypeScript) for DuckProtocol on **Robinhood Chain (4663)** and
 **Ink (57073)**. Meant to run on Render's Starter plan, per `render.yaml` at the repo root.

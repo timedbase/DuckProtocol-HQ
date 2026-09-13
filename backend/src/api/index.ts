@@ -80,5 +80,5 @@ startHealthChecks();
 
 const port = Number(process.env.PORT ?? 3000);
 app.listen(port, () => {
-  console.log(`duckfun.family api listening on :${port}`);
+  console.log(`duckpad.fun api listening on :${port}`);
 });
