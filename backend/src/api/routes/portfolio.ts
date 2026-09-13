@@ -2,6 +2,7 @@ import { Router } from "express";
 import { querySubgraph } from "../../subgraph/client.js";
 import type { ChainSlug } from "../../chain/registry.js";
 import { familyToFrontend } from "../../chain/family.js";
+import { getDecimals } from "../../chain/price.js";
 
 export default function createPortfolioRouter(chain: ChainSlug) {
   const router = Router();
@@ -20,21 +21,22 @@ export default function createPortfolioRouter(chain: ChainSlug) {
       const data = await querySubgraph<{
         tokens: { family: string; [k: string]: unknown }[];
         holders: { token: { id: string; family: string } }[];
-        contributions: { campaign: { id: string; [k: string]: unknown } }[];
+        contributions: { campaign: { id: string; dexQuoteAsset: string; [k: string]: unknown } }[];
         claims: { campaign: { id: string } }[];
         refunds: { campaign: { id: string } }[];
       }>(
         chain,
         `query Portfolio($address: String!) {
           tokens(where: { creator: $address }, orderBy: createdAtBlock, orderDirection: desc) {
-            id family creator quoteToken totalSupply createdAt: createdAtTimestamp createdAtBlock createdAtTx migrated
+            id family creator name symbol quoteToken totalSupply createdAt: createdAtTimestamp createdAtBlock createdAtTx
+            migrated hasPool poolId hook
           }
           holders(where: { account: $address, balance_gt: "0" }, orderBy: balance, orderDirection: desc) {
             token { id family } balance updatedAt updatedAtBlock
           }
           contributions(where: { contributor: $address }) {
             id amount blockNumber timestamp txHash
-            campaign { id creator name symbol goal deadline totalRaised succeeded finalized token { id } }
+            campaign { id creator name symbol dexQuoteAsset goal deadline totalRaised succeeded finalized token { id } }
           }
           claims(where: { contributor: $address }) { campaign { id } }
           refunds(where: { contributor: $address }) { campaign { id } }
@@ -42,6 +44,8 @@ export default function createPortfolioRouter(chain: ChainSlug) {
         { address }
       );
 
+      const quoteAssets = [...new Set(data.contributions.map((c) => c.campaign.dexQuoteAsset))];
+      const decimals = await getDecimals(chain, quoteAssets);
       const claimedCampaigns = new Set(data.claims.map((c) => c.campaign.id));
       const refundedCampaigns = new Set(data.refunds.map((r) => r.campaign.id));
 
@@ -53,7 +57,7 @@ export default function createPortfolioRouter(chain: ChainSlug) {
           ...c,
           // failed isn't a real Campaign field either (only
           // finalized/succeeded) -- same derivation campaigns.ts already uses.
-          campaign: { ...c.campaign, failed: !!c.campaign.finalized && !c.campaign.succeeded },
+          campaign: { ...c.campaign, quoteDecimals: decimals.get(c.campaign.dexQuoteAsset) ?? 18, failed: !!c.campaign.finalized && !c.campaign.succeeded },
           claimed: claimedCampaigns.has(c.campaign.id),
           refunded: refundedCampaigns.has(c.campaign.id),
         })),

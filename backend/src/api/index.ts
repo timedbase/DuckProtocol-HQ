@@ -32,11 +32,11 @@ app.use(rateLimit({
   legacyHeaders: false,
 }));
 
-app.get("/health", (_req, res) => res.json({ ok: true, subgraph: getSubgraphHealth() }));
+app.get("/health", (_req, res) => res.json({ ok: true, chains: getSubgraphHealth() }));
 
-// Every data route is chain-scoped under /ink or /arc (see chain/registry.ts)
-// -- each factory below is called once per chain, closing over which
-// chain's RPC client/subgraph/addresses it reads from. /upload stays
+// Every data route is chain-scoped under /robinhood or /ink (see
+// chain/registry.ts) -- each factory below is called once per chain, closing
+// over which chain's RPC client/subgraph/addresses it reads from. /upload stays
 // unprefixed: pinning metadata to IPFS has nothing chain-specific about it.
 for (const chain of CHAIN_SLUGS) {
   app.use(`/${chain}/tokens`, createTokensRouter(chain));

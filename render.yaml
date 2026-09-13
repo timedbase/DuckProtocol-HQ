@@ -1,8 +1,6 @@
 services:
-  # DuckProtocol's backend API -- single chain (Robinhood, chain id 4663),
-  # no self-hosted subgraph indexing needed here (unlike the legacy Ink/Arc
-  # launchpad's render.yaml): the duck-protocol-rh subgraph is deployed on
-  # Goldsky, which supports this chain natively.
+  # DuckProtocol's backend API -- Robinhood Chain (4663) and Ink (57073).
+  # Both subgraphs are hosted on Goldsky, so no self-hosted indexing here.
   - type: web
     name: duckprotocol-hq-api
     runtime: node
@@ -12,24 +10,49 @@ services:
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm run api
     envVars:
+      # Dedicated RPCs -- each chain falls back to its public RPC if unset.
       - key: ROBINHOOD_RPC_URL
         sync: false
-      # Optional -- subgraph/client.js already defaults this to the
-      # "current" tag of the deployed duck-protocol-rh Goldsky subgraph, so
-      # a redeploy never needs this touched. Uncomment only to pin a
-      # specific version or point at a different indexer.
-      # - key: SUBGRAPH_URL
-      #   value: https://api.goldsky.com/api/public/project_cmhtxnzpqm81001w94ksmgira/subgraphs/duck-protocol-rh/current/gn
+      - key: INK_RPC_URL
+        sync: false
+      # Optional -- both default to the "current" Goldsky tag of their
+      # subgraph (duck-subgraph-rh / duck-subgraph-ink).
+      # - key: ROBINHOOD_SUBGRAPH_URL
+      #   value: https://api.goldsky.com/api/public/project_cmhtxnzpqm81001w94ksmgira/subgraphs/duck-subgraph-rh/current/gn
+      # - key: INK_SUBGRAPH_URL
+      #   value: https://api.goldsky.com/api/public/project_cmhtxnzpqm81001w94ksmgira/subgraphs/duck-subgraph-ink/current/gn
       - key: PORT
         value: "3000"
       - key: PINATA_JWT
         sync: false
-      # Backs persisted token comments/chat -- optional, missing it just
-      # leaves comments 503ing rather than taking the whole API down.
+      # Backs persisted token comments/chat -- optional.
       - key: DATABASE_URL
         sync: false
-      # The platform's own $DUCK token address -- the only token the API
-      # ever marks `verified: true` on. Leave unset until $DUCK actually
-      # launches.
-      - key: DUCK_TOKEN_ADDRESS
+      # The platform's own $DUCK token per chain -- the only token marked
+      # `verified: true`. Leave unset until it launches on that chain.
+      - key: ROBINHOOD_DUCK_TOKEN_ADDRESS
+        sync: false
+      - key: INK_DUCK_TOKEN_ADDRESS
+        sync: false
+
+  # DuckKeeper -- calls claimFees/triggerBuyback/processBatch on both chains
+  # on a schedule (see DuckKeeper/README.md). Holds no special role in any
+  # contract. One pass per invocation, then exits.
+  - type: cron
+    name: duckprotocol-hq-keeper
+    runtime: node
+    plan: starter
+    region: oregon
+    rootDir: DuckKeeper
+    schedule: "0 */3 * * *"
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm run keeper
+    envVars:
+      - key: ROBINHOOD_RPC_URL
+        sync: false
+      - key: INK_RPC_URL
+        sync: false
+      # A plain EOA key funded with gas on both chains -- never the
+      # protocol owner/deployer key. See DuckKeeper/.env.example.
+      - key: KEEPER_PRIVATE_KEY
         sync: false

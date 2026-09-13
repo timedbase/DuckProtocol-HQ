@@ -56,11 +56,6 @@
         "internalType": "address"
       },
       {
-        "name": "permit2_",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
         "name": "hook_",
         "type": "address",
         "internalType": "address"
@@ -95,11 +90,6 @@
     "outputs": [
       {
         "name": "singleton",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "permit2",
         "type": "address",
         "internalType": "address"
       },
@@ -144,7 +134,7 @@
   },
   {
     "type": "function",
-    "name": "executeRoute",
+    "name": "executeSwapRoute",
     "inputs": [
       {
         "name": "route_",
@@ -162,16 +152,6 @@
             "internalType": "bool"
           },
           {
-            "name": "router",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "routerNoDeadline",
-            "type": "bool",
-            "internalType": "bool"
-          },
-          {
             "name": "path",
             "type": "address[]",
             "internalType": "address[]"
@@ -180,16 +160,6 @@
             "name": "fees",
             "type": "uint24[]",
             "internalType": "uint24[]"
-          },
-          {
-            "name": "routers",
-            "type": "address[]",
-            "internalType": "address[]"
-          },
-          {
-            "name": "singleton",
-            "type": "address",
-            "internalType": "address"
           },
           {
             "name": "hook",
@@ -209,9 +179,19 @@
         ]
       },
       {
+        "name": "universalRouter_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
         "name": "quoteToken_",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "nativeIn_",
+        "type": "bool",
+        "internalType": "bool"
       },
       {
         "name": "amountIn_",
@@ -253,11 +233,6 @@
         "internalType": "address"
       },
       {
-        "name": "locker_",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
         "name": "platformWallet_",
         "type": "address",
         "internalType": "address"
@@ -269,11 +244,6 @@
       },
       {
         "name": "initialSingleton_",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "initialPermit2_",
         "type": "address",
         "internalType": "address"
       },
@@ -404,7 +374,17 @@
             "internalType": "uint256"
           },
           {
+            "name": "creatorBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
             "name": "vaultBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "burnBps",
             "type": "uint16",
             "internalType": "uint16"
           },
@@ -426,11 +406,6 @@
         "name": "poolId",
         "type": "bytes32",
         "internalType": "bytes32"
-      },
-      {
-        "name": "tokenId",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "stateMutability": "payable"
@@ -450,16 +425,74 @@
   },
   {
     "type": "function",
-    "name": "locker",
-    "inputs": [],
-    "outputs": [
+    "name": "mintFullRangeDirect",
+    "inputs": [
       {
-        "name": "",
+        "name": "singleton_",
         "type": "address",
-        "internalType": "contract IDuckLocker"
+        "internalType": "address"
+      },
+      {
+        "name": "key",
+        "type": "tuple",
+        "internalType": "struct PoolKey",
+        "components": [
+          {
+            "name": "currency0",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "currency1",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "fee",
+            "type": "uint24",
+            "internalType": "uint24"
+          },
+          {
+            "name": "tickSpacing",
+            "type": "int24",
+            "internalType": "int24"
+          },
+          {
+            "name": "hooks",
+            "type": "address",
+            "internalType": "address"
+          }
+        ]
+      },
+      {
+        "name": "tickLower",
+        "type": "int24",
+        "internalType": "int24"
+      },
+      {
+        "name": "tickUpper",
+        "type": "int24",
+        "internalType": "int24"
+      },
+      {
+        "name": "liquidity",
+        "type": "uint128",
+        "internalType": "uint128"
       }
     ],
-    "stateMutability": "view"
+    "outputs": [
+      {
+        "name": "amount0",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount1",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -620,21 +653,6 @@
         "internalType": "bool"
       },
       {
-        "name": "router",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "routerNoDeadline",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "singleton",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
         "name": "hook",
         "type": "address",
         "internalType": "address"
@@ -716,16 +734,6 @@
             "internalType": "bool"
           },
           {
-            "name": "router",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "routerNoDeadline",
-            "type": "bool",
-            "internalType": "bool"
-          },
-          {
             "name": "path",
             "type": "address[]",
             "internalType": "address[]"
@@ -734,16 +742,6 @@
             "name": "fees",
             "type": "uint24[]",
             "internalType": "uint24[]"
-          },
-          {
-            "name": "routers",
-            "type": "address[]",
-            "internalType": "address[]"
-          },
-          {
-            "name": "singleton",
-            "type": "address",
-            "internalType": "address"
           },
           {
             "name": "hook",
@@ -772,6 +770,19 @@
     "inputs": [
       {
         "name": "tokenImpl_",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setUniversalRouter",
+    "inputs": [
+      {
+        "name": "router_",
         "type": "address",
         "internalType": "address"
       }
@@ -817,6 +828,19 @@
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "universalRouter",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -893,12 +917,6 @@
       },
       {
         "name": "singleton",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
-      },
-      {
-        "name": "permit2",
         "type": "address",
         "indexed": false,
         "internalType": "address"
@@ -1200,12 +1218,19 @@
         "type": "bytes32",
         "indexed": false,
         "internalType": "bytes32"
-      },
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "UniversalRouterUpdated",
+    "inputs": [
       {
-        "name": "tokenId",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
+        "name": "router",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       }
     ],
     "anonymous": false
@@ -1246,11 +1271,6 @@
         "internalType": "address"
       }
     ]
-  },
-  {
-    "type": "error",
-    "name": "ApprovalFailed",
-    "inputs": []
   },
   {
     "type": "error",

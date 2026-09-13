@@ -140,7 +140,7 @@
   },
   {
     "type": "function",
-    "name": "executeRoute",
+    "name": "executeSwapRoute",
     "inputs": [
       {
         "name": "route_",
@@ -158,16 +158,6 @@
             "internalType": "bool"
           },
           {
-            "name": "router",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "routerNoDeadline",
-            "type": "bool",
-            "internalType": "bool"
-          },
-          {
             "name": "path",
             "type": "address[]",
             "internalType": "address[]"
@@ -176,16 +166,6 @@
             "name": "fees",
             "type": "uint24[]",
             "internalType": "uint24[]"
-          },
-          {
-            "name": "routers",
-            "type": "address[]",
-            "internalType": "address[]"
-          },
-          {
-            "name": "singleton",
-            "type": "address",
-            "internalType": "address"
           },
           {
             "name": "hook",
@@ -205,9 +185,19 @@
         ]
       },
       {
+        "name": "universalRouter_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
         "name": "quoteToken_",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "nativeIn_",
+        "type": "bool",
+        "internalType": "bool"
       },
       {
         "name": "amountIn_",
@@ -456,6 +446,77 @@
   },
   {
     "type": "function",
+    "name": "mintFullRangeDirect",
+    "inputs": [
+      {
+        "name": "singleton_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "key",
+        "type": "tuple",
+        "internalType": "struct PoolKey",
+        "components": [
+          {
+            "name": "currency0",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "currency1",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "fee",
+            "type": "uint24",
+            "internalType": "uint24"
+          },
+          {
+            "name": "tickSpacing",
+            "type": "int24",
+            "internalType": "int24"
+          },
+          {
+            "name": "hooks",
+            "type": "address",
+            "internalType": "address"
+          }
+        ]
+      },
+      {
+        "name": "tickLower",
+        "type": "int24",
+        "internalType": "int24"
+      },
+      {
+        "name": "tickUpper",
+        "type": "int24",
+        "internalType": "int24"
+      },
+      {
+        "name": "liquidity",
+        "type": "uint128",
+        "internalType": "uint128"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "amount0",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount1",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "pendingBuyback",
     "inputs": [],
     "outputs": [
@@ -476,6 +537,19 @@
         "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "poolLinkedAt",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint40",
+        "internalType": "uint40"
       }
     ],
     "stateMutability": "view"
@@ -544,21 +618,6 @@
         "name": "enabled",
         "type": "bool",
         "internalType": "bool"
-      },
-      {
-        "name": "router",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "routerNoDeadline",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "singleton",
-        "type": "address",
-        "internalType": "address"
       },
       {
         "name": "hook",
@@ -694,6 +753,19 @@
       }
     ],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "universalRouter",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1069,6 +1141,19 @@
   },
   {
     "type": "event",
+    "name": "UniversalRouterUpdated",
+    "inputs": [
+      {
+        "name": "router",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "Upgraded",
     "inputs": [
       {
@@ -1113,11 +1198,6 @@
   {
     "type": "error",
     "name": "AlreadyLinked",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ApprovalFailed",
     "inputs": []
   },
   {
@@ -1240,6 +1320,32 @@
     "type": "error",
     "name": "PoolDepthUnavailable",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PoolTooYoung",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Reentrant",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SafeCastOverflowedUintDowncast",
+    "inputs": [
+      {
+        "name": "bits",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   },
   {
     "type": "error",

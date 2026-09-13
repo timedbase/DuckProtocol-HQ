@@ -1,4 +1,4 @@
-// The subgraph's real TokenFamily enum (DuckProtocol-RH/schema.graphql) is
+// The subgraph's real TokenFamily enum (subgraph/DuckSubgraph-*/schema.graphql) is
 // PascalCase: BondingCurve / Launcher / Crowdfund. The frontend's entire
 // vocabulary -- adapters.js, App.jsx's routing (openToken sends "CAMPAIGN"
 // to CampaignPage, everything else to TokenPage), DiscoverPage's filter

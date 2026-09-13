@@ -22,6 +22,7 @@ const NOT_CHECKED_YET: SubgraphHealth = {
 
 const lastHealth: Record<ChainSlug, SubgraphHealth> = {
   robinhood: { ...NOT_CHECKED_YET },
+  ink: { ...NOT_CHECKED_YET },
 };
 
 export function getSubgraphHealth(): Record<ChainSlug, SubgraphHealth> {

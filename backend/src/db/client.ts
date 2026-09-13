@@ -27,17 +27,12 @@ let schemaReady: Promise<void> | null = null;
 export function ensureSchema(): Promise<void> {
   if (!pool) return Promise.reject(new Error("DATABASE_URL is not set"));
   if (!schemaReady) {
-    // `chain` defaults to 'ink' for the CREATE TABLE (every comment ever
-    // posted was on Ink, back when it was the only chain) and the same
-    // default covers the ALTER TABLE path for a table that already existed
-    // before this column did -- both leave existing rows correctly attributed
-    // rather than NULL. A real discriminator matters here: token addresses
-    // are NOT guaranteed unique across chains (Arc's deploy landed several
-    // addresses byte-for-byte identical to Ink's, a real, confirmed
-    // coincidence from matching deployer nonces -- see
-    // Duck-Family-Contract's deploy-arc/deployments/arc.json), so without
-    // this a comment thread could silently mix two unrelated tokens'
-    // comments together.
+    // `chain` ('robinhood' | 'ink') is written explicitly on every insert.
+    // The 'ink' default only exists so the ALTER TABLE path could backfill a
+    // table created before the column did. A discriminator matters because
+    // token addresses are not unique across chains -- both chains share one
+    // CREATE2 deployer -- so without it a thread could mix two unrelated
+    // tokens' comments.
     schemaReady = pool
       .query(`
         CREATE TABLE IF NOT EXISTS comments (

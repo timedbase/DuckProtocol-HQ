@@ -1,41 +1,30 @@
 import { Router } from "express";
 import { querySubgraph } from "../../subgraph/client.js";
 import type { ChainSlug } from "../../chain/registry.js";
-import { getUsdPrices, decimalsFor } from "../../chain/price.js";
+import { getUsdPrices, getDecimals } from "../../chain/price.js";
 
-// `failed` isn't a real schema field (Campaign only tracks `finalized`/
-// `succeeded`) -- derived below as finalized && !succeeded instead of
-// querying a field that doesn't exist. `createdAt`/`resolvedAt`/
-// `resolvedAtBlock` aren't real fields either (Campaign only has
-// createdAtTimestamp) -- dropped rather than guessed at.
-// totalSupply/contributorBps/lpBps/hookFeeBps/vaultBps are set once at
-// launch() time and never re-emitted in any event, so the subgraph reads
-// them itself via a getCampaignMeta contract call inside its own
-// handleCampaignCreated (see DuckProtocol-RH/src/duck-crowdfund.ts) --
-// nullable there, since a reverted call at index time just leaves them
-// unset rather than a fabricated value.
+// `failed` isn't a schema field (Campaign only tracks finalized/succeeded) -- derived below.
+// totalSupply/contributorBps/lpBps/hookFeeBps/vaultBps are read once by the subgraph via
+// getCampaignMeta when the campaign is created, and are null if that call reverted.
 const CAMPAIGN_FIELDS = `
   id campaignId creator name symbol dexQuoteAsset goal startTime deadline totalRaised succeeded finalized
-  totalSupply contributorBps lpBps hookFeeBps vaultBps
+  metaUri totalSupply contributorBps lpBps hookFeeBps vaultBps
   createdAt: createdAtTimestamp createdAtBlock createdAtTx
   token { id }
 `;
 
-type CampaignRow = { dexQuoteAsset: string | null; goal: string; totalRaised: string; succeeded: boolean; finalized: boolean };
+type CampaignRow = { dexQuoteAsset: string; goal: string; totalRaised: string; succeeded: boolean; finalized: boolean };
 
-// GOAL/totalRaised are always denominated in the campaign's own
-// dexQuoteAsset (raw on-chain units) -- goalUsd/totalRaisedUsd are a single
-// multiplication against that asset's current USD price (chain/price.ts),
-// identical treatment to tokens.ts's market-cap/volume USD attachment. Null
-// when the quote asset can't be priced right now, never fabricated.
-async function attachCampaignUsd<T extends CampaignRow>(chain: ChainSlug, campaigns: T[]): Promise<(T & { goalUsd: string | null; totalRaisedUsd: string | null; failed: boolean })[]> {
-  const quoteAddresses = [...new Set(campaigns.map((c) => c.dexQuoteAsset).filter((a): a is string => !!a))];
-  const prices = await getUsdPrices(chain, quoteAddresses);
+// goal/totalRaised are raw units of the campaign's own quote asset; the USD figures use that
+// asset's current subgraph reference price. Null when it has none, never fabricated.
+async function attachCampaignUsd<T extends CampaignRow>(chain: ChainSlug, campaigns: T[]) {
+  const quoteAddresses = [...new Set(campaigns.map((c) => c.dexQuoteAsset))];
+  const [prices, decimals] = await Promise.all([getUsdPrices(chain, quoteAddresses), getDecimals(chain, quoteAddresses)]);
   return campaigns.map((c) => {
-    const usd = c.dexQuoteAsset ? prices.get(c.dexQuoteAsset) ?? null : null;
-    const decimals = c.dexQuoteAsset ? decimalsFor(chain, c.dexQuoteAsset) : 18;
-    const toUsd = (raw: string) => (usd != null ? String((Number(raw) / 10 ** decimals) * usd) : null);
-    return { ...c, goalUsd: toUsd(c.goal), totalRaisedUsd: toUsd(c.totalRaised), failed: c.finalized && !c.succeeded };
+    const usd = prices.get(c.dexQuoteAsset) ?? null;
+    const quoteDecimals = decimals.get(c.dexQuoteAsset) ?? 18;
+    const toUsd = (raw: string) => (usd != null ? String((Number(raw) / 10 ** quoteDecimals) * usd) : null);
+    return { ...c, quoteDecimals, goalUsd: toUsd(c.goal), totalRaisedUsd: toUsd(c.totalRaised), failed: c.finalized && !c.succeeded };
   });
 }
 

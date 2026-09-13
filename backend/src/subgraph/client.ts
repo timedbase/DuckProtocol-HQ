@@ -1,15 +1,13 @@
 import "dotenv/config";
 import type { ChainSlug } from "../chain/registry.js";
+import { ADDRESSES } from "../chain/addresses.js";
 
+// Each chain defaults to the "current" Goldsky tag of its own subgraph (DuckSubgraph-RH /
+// DuckSubgraph-Ink under ../subgraph), so a subgraph redeploy never needs these touched. The env
+// vars pin a specific version or point at a different indexer.
 const SUBGRAPH_URL_ENV_VAR: Record<ChainSlug, string> = {
-  robinhood: "SUBGRAPH_URL",
-};
-
-// Default: the Goldsky "current" tag for the duck-protocol-rh subgraph, so
-// a redeploy of the subgraph never needs this env var touched. Overridable
-// via SUBGRAPH_URL for a pinned version or a different indexer.
-const DEFAULT_SUBGRAPH_URL: Partial<Record<ChainSlug, string>> = {
-  robinhood: "https://api.goldsky.com/api/public/project_cmhtxnzpqm81001w94ksmgira/subgraphs/duck-protocol-rh/current/gn",
+  robinhood: "ROBINHOOD_SUBGRAPH_URL",
+  ink: "INK_SUBGRAPH_URL",
 };
 
 export class SubgraphError extends Error {
@@ -18,20 +16,10 @@ export class SubgraphError extends Error {
   }
 }
 
-// Thin GraphQL POST helper -- no client library needed for a handful of
-// fixed queries. Lazy and per-chain (unlike the old single-chain module,
-// which threw at import time if SUBGRAPH_URL was missing): a missing
-// ARC_SUBGRAPH_URL should 502 only the /arc routes that need it, not take
-// the whole API down for Ink too. Throws SubgraphError on a GraphQL-level
-// error response, or if the chain's URL isn't configured, so route handlers
-// can just await this and let their own try/catch respond with a 502, same
-// as any other upstream-dependency failure.
+// Thin GraphQL POST helper. Throws SubgraphError on an HTTP or GraphQL-level error so route
+// handlers can let their own try/catch respond with a 502.
 export async function querySubgraph<T>(chain: ChainSlug, query: string, variables?: Record<string, unknown>): Promise<T> {
-  const envVar = SUBGRAPH_URL_ENV_VAR[chain];
-  const url = process.env[envVar] || DEFAULT_SUBGRAPH_URL[chain];
-  if (!url) {
-    throw new SubgraphError(`${envVar} is not set`, null);
-  }
+  const url = process.env[SUBGRAPH_URL_ENV_VAR[chain]] || ADDRESSES[chain].defaultSubgraphUrl;
 
   const res = await fetch(url, {
     method: "POST",
