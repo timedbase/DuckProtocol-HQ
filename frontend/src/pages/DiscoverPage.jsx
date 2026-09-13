@@ -194,37 +194,119 @@ function FeedCard({ t }) {
   );
 }
 
-// Custom popover dropdown -- replaces a bare native <select>, which
-// renders with the OS's own unstyled chrome and was the one control left
-// on this page that didn't match everything else's dark/mono styling.
-// Matches the same button+absolute-panel shape App.jsx's own chain
-// selector already uses, just generalized to take any option list.
-function Dropdown({ value, onChange, options, isMobile }) {
+function Chevron({ open }) {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" style={cs(`flex:none;opacity:.7;transition:transform .15s ease;transform:${open ? "rotate(180deg)" : "none"}`)}>
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
+
+// A pill that opens a popover list. `title` names the control ("Market cap");
+// once a non-default option is picked the pill turns lime and shows that
+// value, so active filters read at a glance. `showValue` always shows the
+// current value (used for Sort, which has no "off" state).
+function FilterMenu({ title, value, options, onChange, align = "left", showValue = false }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
     if (!open) return;
-    const onDocClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
   }, [open]);
   const current = options.find((o) => o.key === value) || options[0];
+  const active = !showValue && value !== options[0].key;
   return (
-    <div ref={ref} style={cs(`position:relative;flex:1 1 110px;min-width:0;${isMobile ? "" : ""}`)}>
-      <button onClick={() => setOpen((o) => !o)} style={cs(`width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--line);border-radius:8px;background:var(--card);padding:${isMobile ? "7px 8px" : "8px 12px"};font-family:'JetBrains Mono',monospace;font-size:${isMobile ? "11px" : "12px"};color:var(--ink);cursor:pointer;white-space:nowrap`)}>
-        <span style={cs("overflow:hidden;text-overflow:ellipsis")}>{current?.label}</span>
-        <span style={cs(`font-size:9px;color:var(--mute);flex:none;transform:${open ? "rotate(180deg)" : "none"}`)}>▾</span>
+    <div ref={ref} style={cs("position:relative;flex:none")}>
+      <button onClick={() => setOpen((o) => !o)} aria-expanded={open}
+        style={cs(`display:flex;align-items:center;gap:7px;height:34px;padding:0 12px;border-radius:999px;border:1px solid ${active ? "rgba(163,230,53,.55)" : "var(--line)"};background:${active ? "rgba(163,230,53,.10)" : "var(--paper)"};color:var(--ink);font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap`)}>
+        <span style={cs(`color:${active ? "var(--lime)" : "var(--mute)"};font-weight:${active || showValue ? "500" : "600"}`)}>{title}</span>
+        {(active || showValue) && <span>{current.label}</span>}
+        <Chevron open={open} />
       </button>
       {open && (
-        <div style={cs("position:absolute;top:calc(100% + 4px);left:0;z-index:50;min-width:180px;border:1px solid var(--line);border-radius:8px;background:var(--card);box-shadow:var(--sh);overflow:hidden;padding:4px")}>
-          {options.map((o) => (
-            <button key={o.key} onClick={() => { onChange(o.key); setOpen(false); }} style={cs(`display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:9px 10px;border:0;border-radius:6px;background:${o.key === value ? "var(--paper)" : "transparent"};color:var(--ink);font-size:12.5px;font-weight:${o.key === value ? "700" : "500"};text-align:left;cursor:pointer;white-space:nowrap`)}>
-              {o.label}
-              {o.key === value && <span style={cs("color:var(--lime);font-size:12px;flex:none")}>✓</span>}
-            </button>
-          ))}
+        <div role="listbox" style={cs(`position:absolute;top:calc(100% + 6px);${align}:0;z-index:60;min-width:200px;border:1px solid var(--line);border-radius:12px;background:var(--card);box-shadow:0 18px 40px -12px rgba(0,0,0,.7);padding:5px;animation:slidein .14s ease both`)}>
+          <div style={cs("padding:7px 10px 6px;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;color:var(--mute)")}>{title.toUpperCase()}</div>
+          {options.map((o) => {
+            const selected = o.key === value;
+            return (
+              <button key={o.key} onClick={() => { onChange(o.key); setOpen(false); }} className="d-hover-paper"
+                style={cs(`display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:9px 10px;border:0;border-radius:8px;background:${selected ? "var(--paper)" : "transparent"};color:${selected ? "var(--ink)" : "var(--mute)"};font-size:13px;font-weight:${selected ? "700" : "500"};text-align:left;cursor:pointer;white-space:nowrap`)}>
+                {o.label}
+                {selected && <span style={cs("color:var(--lime);font-size:12px;flex:none")}>✓</span>}
+              </button>
+            );
+          })}
         </div>
       )}
+    </div>
+  );
+}
+
+// Search, sort and layout on top; family tabs, then the refining filters with
+// a live result count and a single "Clear" that resets everything.
+function DiscoverToolbar({ v }) {
+  const m = v.isMobile;
+  const canClear = v.activeFilterCount > 0 || v.query || v.filterKey !== "All";
+  const summary = (
+    <>
+      <span style={cs("font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--mute);white-space:nowrap")}>
+        <span style={cs("color:var(--ink);font-weight:600")}>{v.resultCount}</span> of {v.totalCount}
+      </span>
+      {canClear && (
+        <button onClick={v.resetFilters} style={cs("height:30px;padding:0 11px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap")}>Clear</button>
+      )}
+    </>
+  );
+  return (
+    <div style={cs("border:1px solid var(--line);border-radius:12px;background:var(--card);margin-bottom:16px")}>
+      <div style={cs(`display:flex;align-items:center;gap:8px;padding:10px;${m ? "flex-wrap:wrap" : ""}`)}>
+        <label style={cs(`flex:1 1 ${m ? "100%" : "260px"};min-width:0;display:flex;align-items:center;gap:9px;height:40px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);cursor:text`)}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={cs("color:var(--mute);flex:none")}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+          <input value={v.query} onChange={v.setQuery} placeholder="Search name, ticker, token or creator address"
+            style={cs("flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--ink);font-size:13.5px")} />
+          {v.query && (
+            <button onClick={v.clearQuery} aria-label="Clear search" style={cs("flex:none;width:22px;height:22px;border:0;border-radius:999px;background:var(--soft);color:var(--mute);font-size:13px;line-height:1;cursor:pointer")}>×</button>
+          )}
+        </label>
+        {m ? (
+          <div style={cs("flex:1 1 100%;display:flex;align-items:center;gap:8px")}>
+            <FilterMenu title="Sort" value={v.sort} options={v.sortOptions} onChange={v.setSort} showValue />
+            <div style={cs("flex:1")}></div>
+            {summary}
+          </div>
+        ) : (
+          <FilterMenu title="Sort" value={v.sort} options={v.sortOptions} onChange={v.setSort} showValue align="right" />
+        )}
+        {!m && (
+          <div style={cs("display:flex;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--paper);flex:none")}>
+            {[["cards", "Cards", v.setLayoutCards, v.layoutCards], ["table", "Table", v.setLayoutTable, v.layoutTable]].map(([key, label, go, on]) => (
+              <button key={key} onClick={go} style={cs(`height:32px;padding:0 12px;border:0;border-radius:7px;background:${on ? "var(--ink)" : "transparent"};color:${on ? "var(--card)" : "var(--mute)"};font-size:12.5px;font-weight:600;cursor:pointer`)}>{label}</button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={cs("display:flex;gap:4px;padding:0 10px 10px;overflow-x:auto;scrollbar-width:none")}>
+        {v.familyTabs.map((t) => (
+          <button key={t.key} onClick={t.go}
+            style={cs(`flex:none;display:flex;align-items:center;gap:7px;height:34px;padding:0 12px;border:1px solid ${t.active ? "var(--ink)" : "transparent"};border-radius:9px;background:${t.active ? "var(--ink)" : "transparent"};color:${t.active ? "var(--card)" : "var(--mute)"};font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap`)}>
+            {t.label}
+            <span style={cs(`font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:1px 6px;border-radius:999px;background:${t.active ? "rgba(0,0,0,.12)" : "var(--soft)"};color:${t.active ? "var(--card)" : "var(--mute)"}`)}>{t.count}</span>
+          </button>
+        ))}
+      </div>
+
+      <div style={cs("display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:10px;border-top:1px solid var(--soft)")}>
+        <FilterMenu title="Market cap" value={v.mcapFilter} options={v.mcapPresets} onChange={v.setMcapFilter} />
+        <FilterMenu title="Launched" value={v.launchedFilter} options={v.launchedPresets} onChange={v.setLaunchedFilter} />
+        <FilterMenu title="Pair" value={v.quoteFilter} options={v.quoteFilterOptions} onChange={v.setQuoteFilter} />
+        {!m && <div style={cs("flex:1;min-width:8px")}></div>}
+        {!m && summary}
+      </div>
     </div>
   );
 }
@@ -242,38 +324,7 @@ export default function DiscoverPage({ v }) {
         {v.kingCoin && <TheDuckCard v={v} />}
       </div>
 
-      <div style={cs("border:1px solid var(--line);border-radius:10px;background:var(--card);padding:10px;display:flex;flex-direction:column;gap:10px;margin-bottom:16px")}>
-        <div style={cs("display:flex;gap:10px;flex-wrap:wrap;align-items:center")}>
-          <div style={cs(`display:flex;border:1px solid var(--line);border-radius:8px;overflow-x:auto;background:var(--paper);${v.isMobile ? "width:100%" : ""}`)}>
-            {v.sortTabs.map((h, i) => (
-              <button key={i} onClick={h.go} style={cs(`padding:${v.isMobile ? "7px 10px" : "8px 14px"};border:0;flex:${v.isMobile ? "1" : "none"};border-left:${i === 0 ? "0" : "1px solid var(--line)"};background:${h.bg};color:${h.fg};font-size:${v.isMobile ? "11px" : "12.5px"};font-weight:600;white-space:nowrap;cursor:pointer`)}>{h.label}</button>
-            ))}
-          </div>
-          {!v.isMobile && <div style={cs("width:1px;align-self:stretch;background:var(--line)")}></div>}
-          <div style={cs(`display:flex;border:1px solid var(--line);border-radius:8px;overflow-x:auto;max-width:100%;background:var(--paper);${v.isMobile ? "width:100%" : ""}`)}>
-            {v.filters.map((f, i) => (
-              <button key={i} onClick={f.go} style={cs(`padding:${v.isMobile ? "7px 8px" : "8px 14px"};border:0;flex:${v.isMobile ? "1" : "none"};white-space:nowrap;border-left:${f.dv};background:${f.bg};color:${f.fg};font-size:${v.isMobile ? "10.5px" : "12.5px"};font-weight:600;cursor:pointer`)}>{f.label}</button>
-            ))}
-          </div>
-          {!v.isMobile && <div style={cs("flex:1")}></div>}
-          {!v.isMobile && (
-            <div style={cs("display:flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex:none")}>
-              <button onClick={v.setLayoutCards} style={cs(`padding:8px 14px;border:0;background:${v.lcBg};color:${v.lcFg};font-size:12.5px;font-weight:600;cursor:pointer`)}>Cards</button>
-              <button onClick={v.setLayoutTable} style={cs(`padding:8px 14px;border:0;border-left:1px solid var(--line);background:${v.ltBg};color:${v.ltFg};font-size:12.5px;font-weight:600;cursor:pointer`)}>Table</button>
-            </div>
-          )}
-        </div>
-
-        <div style={cs("display:flex;gap:8px;flex-wrap:wrap;align-items:center")}>
-          <Dropdown value={v.mcapFilter} onChange={v.setMcapFilter} options={v.mcapPresets} isMobile={v.isMobile} />
-          <Dropdown value={v.launchedFilter} onChange={v.setLaunchedFilter} options={v.launchedPresets} isMobile={v.isMobile} />
-          <Dropdown value={v.quoteFilter} onChange={v.setQuoteFilter} options={v.quoteFilterOptions.map((q) => ({ key: q, label: q === "any" ? "Any pair" : q }))} isMobile={v.isMobile} />
-          <div style={cs(`display:flex;align-items:center;gap:9px;padding:8px 13px;border:1px solid var(--line);border-radius:8px;background:var(--paper);min-width:${v.isMobile ? "0" : "230px"};width:${v.isMobile ? "100%" : "auto"};flex:${v.isMobile ? "1 1 100%" : "1 1 230px"}`)}>
-            <span style={cs("color:var(--mute);font-size:13px")}>⌕</span>
-            <input value={v.query} onChange={v.setQuery} placeholder="Name, symbol or address" style={cs("border:0;outline:0;background:transparent;font-size:13px;width:100%")} />
-          </div>
-        </div>
-      </div>
+      <DiscoverToolbar v={v} />
 
       {(v.layoutCards || v.isMobile) && (
         <div style={cs(`display:grid;grid-template-columns:repeat(auto-fill,minmax(${v.isMobile ? "150px" : "228px"},1fr));gap:14px`)}>

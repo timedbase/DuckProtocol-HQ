@@ -1198,12 +1198,6 @@ export default function App() {
               <span style={cs(`font-size:${m ? "14.5px" : "15.5px"};font-weight:600;letter-spacing:-.02em;white-space:nowrap`)}>duckpad</span>
             </div>
             <div style={cs("flex:1;min-width:0")}></div>
-            {v.isHome && !m && (
-              <div style={cs("display:flex;align-items:center;gap:8px;height:36px;padding:0 11px;border:1px solid var(--line);border-radius:6px;background:var(--paper);flex:1 1 200px;max-width:280px;min-width:0")}>
-                <span style={cs("color:var(--mute);font-size:13px")}>⌕</span>
-                <input value={v.query} onChange={v.setQuery} placeholder="Search name, symbol or address" style={cs("border:0;outline:0;background:transparent;font-size:13px;width:100%")} />
-              </div>
-            )}
             <div ref={chainMenuRef} style={cs("position:relative;flex:none")}>
               <button onClick={v.toggleChainMenu} title={v.chainName} style={cs(`display:flex;align-items:center;gap:6px;height:36px;padding:0 ${m ? "9px" : "10px"};border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);cursor:pointer`)}>
                 <img src={v.chainLogoUrl} alt={v.chainName} style={cs("width:20px;height:20px;border-radius:999px;display:block;flex:none;object-fit:cover")} />
@@ -1314,22 +1308,31 @@ function buildViewModel(ctx) {
   // standalone pages) -- small enough to live entirely in a bottom tab bar,
   // matching brew.family/flap.sh's mobile pattern but used at every viewport
   // instead of a desktop sidebar + separate mobile drawer.
-  const filters = ["All", "CURVE", "INSTANT", "CAMPAIGN", "Migrated"].map((key) => {
-    const label = key === "CURVE" ? "Bonding" : key === "INSTANT" ? "Instant" : key === "CAMPAIGN" ? "Crowdlaunch" : key;
-    return Object.assign({ key, label, dv: key === "All" ? "0" : "1px solid var(--line)", go: () => set({ filter: key }) }, block(s.filter === key));
-  });
+  // Family tabs carry a count over every loaded token, so an empty tab says so
+  // before it's clicked.
+  const FAMILY_TESTS = {
+    All: () => true,
+    CURVE: (c) => c.family === "CURVE",
+    INSTANT: (c) => c.family === "INSTANT",
+    CAMPAIGN: (c) => c.family === "CAMPAIGN",
+    Migrated: (c) => c.migrated,
+  };
+  const familyTabs = [["All", "All"], ["CURVE", "Bonding"], ["INSTANT", "Instant"], ["CAMPAIGN", "Crowdlaunch"], ["Migrated", "Migrated"]]
+    .map(([key, label]) => ({ key, label, count: s.coins.filter(FAMILY_TESTS[key]).length, active: s.filter === key, go: () => set({ filter: key }) }));
 
-  let list = s.coins.slice();
-  if (s.filter === "Migrated") list = list.filter((c) => c.migrated);
-  else if (s.filter !== "All") list = list.filter((c) => c.family === s.filter);
+  let list = s.coins.filter(FAMILY_TESTS[s.filter] || FAMILY_TESTS.All);
   // A token with no priced trade yet has no mcUsd to test -- pass it through
   // rather than guess, so an untraded launch is never hidden by mistake.
   if (s.mcapFilter !== "any") { const test = MCAP_TEST[s.mcapFilter]; list = list.filter((c) => c.mcUsd == null || test(c.mcUsd)); }
   if (s.launchedFilter !== "any") { const test = LAUNCHED_TEST[s.launchedFilter]; list = list.filter((c) => test(c.ageMin)); }
   if (s.quoteFilter !== "any") list = list.filter((c) => c.quote === s.quoteFilter);
   const q = s.query.trim().toLowerCase();
-  if (q) list = list.filter((c) => (c.name + c.ticker + c.dev).toLowerCase().includes(q));
-  const quoteFilterOptions = ["any", ...new Set(s.coins.map((c) => c.quote))];
+  if (q) list = list.filter((c) => `${c.name} ${c.ticker} ${c.id} ${c.creator || ""}`.toLowerCase().includes(q));
+  const quoteFilterOptions = [
+    { key: "any", label: "Any pair" },
+    ...[...new Set(s.coins.map((c) => c.quote))].sort().map((sym) => ({ key: sym, label: sym })),
+  ];
+  const activeFilterCount = [s.mcapFilter !== "any", s.launchedFilter !== "any", s.quoteFilter !== "any"].filter(Boolean).length;
 
   const isInstant = (c) => c.family === "INSTANT";
   const shape = (c) => ({
@@ -1368,8 +1371,7 @@ function buildViewModel(ctx) {
     New: { sort: (a, b) => a.ageMin - b.ageMin },
   };
   const sortMode = SORT_MODES[s.sort] || SORT_MODES["Last activity"];
-  const sortTabs = Object.keys(SORT_MODES).map((label) =>
-    Object.assign({ label, go: () => set({ sort: label }) }, block(s.sort === label)));
+  const sortOptions = Object.keys(SORT_MODES).map((label) => ({ key: label, label }));
   const feed = list.slice().sort(sortMode.sort).map(shape);
 
   // Discover's hero slot is pinned to the platform's own token ("The Duck",
@@ -1465,13 +1467,14 @@ function buildViewModel(ctx) {
     goHome: () => set({ screen: "home" }), goCreate: () => set({ screen: "create" }),
     goPortfolio: () => set({ screen: "portfolio" }),
 
-    filters, feed, isEmpty: feed.length === 0,
-    sortTabs, kingCoin, duckLaunched,
+    familyTabs, filterKey: s.filter, feed, isEmpty: feed.length === 0,
+    resultCount: feed.length, totalCount: s.coins.length, activeFilterCount,
+    resetFilters: () => set({ filter: "All", mcapFilter: "any", launchedFilter: "any", quoteFilter: "any", query: "" }),
+    sortOptions, sort: s.sort, setSort: (key) => set({ sort: key }),
+    kingCoin, duckLaunched,
     layoutCards: s.layout === "cards", layoutTable: s.layout === "table",
     setLayoutCards: () => set({ layout: "cards" }), setLayoutTable: () => set({ layout: "table" }),
-    lcBg: block(s.layout === "cards").bg, lcFg: block(s.layout === "cards").fg,
-    ltBg: block(s.layout === "table").bg, ltFg: block(s.layout === "table").fg,
-    query: s.query, setQuery: (e) => set({ query: e.target.value }),
+    query: s.query, setQuery: (e) => set({ query: e.target.value }), clearQuery: () => set({ query: "" }),
     mcapPresets: MCAP_PRESETS, mcapFilter: s.mcapFilter, setMcapFilter: (key) => set({ mcapFilter: key }),
     launchedPresets: LAUNCHED_PRESETS, launchedFilter: s.launchedFilter, setLaunchedFilter: (key) => set({ launchedFilter: key }),
     quoteFilterOptions, quoteFilter: s.quoteFilter, setQuoteFilter: (key) => set({ quoteFilter: key }),
