@@ -246,48 +246,43 @@ function FilterMenu({ title, value, options, onChange, align = "left", showValue
   );
 }
 
-// Search, sort and layout on top; family tabs, then the refining filters with
-// a live result count and a single "Clear" that resets everything.
-function DiscoverToolbar({ v }) {
-  const m = v.isMobile;
-  const canClear = v.activeFilterCount > 0 || v.query || v.filterKey !== "All";
-  const summary = (
-    <>
-      <span style={cs("font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--mute);white-space:nowrap")}>
-        <span style={cs("color:var(--ink);font-weight:600")}>{v.resultCount}</span> of {v.totalCount}
-      </span>
-      {canClear && (
-        <button onClick={v.resetFilters} style={cs("height:30px;padding:0 11px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap")}>Clear</button>
+function SearchBox({ v, placeholder, height = 40, fontSize = "13.5px" }) {
+  return (
+    <label style={cs(`flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:8px;height:${height}px;padding:0 11px;border:1px solid var(--line);border-radius:10px;background:var(--paper);cursor:text`)}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={cs("color:var(--mute);flex:none")}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+      <input value={v.query} onChange={v.setQuery} placeholder={placeholder}
+        style={cs(`flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--ink);font-size:${fontSize}`)} />
+      {v.query && (
+        <button onClick={v.clearQuery} aria-label="Clear search" style={cs("flex:none;width:22px;height:22px;border:0;border-radius:999px;background:var(--soft);color:var(--mute);font-size:13px;line-height:1;cursor:pointer")}>×</button>
       )}
-    </>
+    </label>
   );
+}
+
+function ResultCount({ v }) {
+  return (
+    <span style={cs("font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--mute);white-space:nowrap")}>
+      <span style={cs("color:var(--ink);font-weight:600")}>{v.resultCount}</span> of {v.totalCount}
+    </span>
+  );
+}
+
+// Desktop: search, sort and layout on top; family tabs, then the refining
+// filters with a live result count and one "Clear" that resets everything.
+// Small screens get a compact bar with the refining filters in a bottom sheet.
+function DiscoverToolbar({ v }) {
+  if (v.isMobile) return <MobileToolbar v={v} />;
+  const canClear = v.activeFilterCount > 0 || v.query || v.filterKey !== "All";
   return (
     <div style={cs("border:1px solid var(--line);border-radius:12px;background:var(--card);margin-bottom:16px")}>
-      <div style={cs(`display:flex;align-items:center;gap:8px;padding:10px;${m ? "flex-wrap:wrap" : ""}`)}>
-        <label style={cs(`flex:1 1 ${m ? "100%" : "260px"};min-width:0;display:flex;align-items:center;gap:9px;height:40px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);cursor:text`)}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={cs("color:var(--mute);flex:none")}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
-          <input value={v.query} onChange={v.setQuery} placeholder="Search name, ticker, token or creator address"
-            style={cs("flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--ink);font-size:13.5px")} />
-          {v.query && (
-            <button onClick={v.clearQuery} aria-label="Clear search" style={cs("flex:none;width:22px;height:22px;border:0;border-radius:999px;background:var(--soft);color:var(--mute);font-size:13px;line-height:1;cursor:pointer")}>×</button>
-          )}
-        </label>
-        {m ? (
-          <div style={cs("flex:1 1 100%;display:flex;align-items:center;gap:8px")}>
-            <FilterMenu title="Sort" value={v.sort} options={v.sortOptions} onChange={v.setSort} showValue />
-            <div style={cs("flex:1")}></div>
-            {summary}
-          </div>
-        ) : (
-          <FilterMenu title="Sort" value={v.sort} options={v.sortOptions} onChange={v.setSort} showValue align="right" />
-        )}
-        {!m && (
-          <div style={cs("display:flex;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--paper);flex:none")}>
-            {[["cards", "Cards", v.setLayoutCards, v.layoutCards], ["table", "Table", v.setLayoutTable, v.layoutTable]].map(([key, label, go, on]) => (
-              <button key={key} onClick={go} style={cs(`height:32px;padding:0 12px;border:0;border-radius:7px;background:${on ? "var(--ink)" : "transparent"};color:${on ? "var(--card)" : "var(--mute)"};font-size:12.5px;font-weight:600;cursor:pointer`)}>{label}</button>
-            ))}
-          </div>
-        )}
+      <div style={cs("display:flex;align-items:center;gap:8px;padding:10px")}>
+        <SearchBox v={v} placeholder="Search name, ticker, token or creator address" />
+        <FilterMenu title="Sort" value={v.sort} options={v.sortOptions} onChange={v.setSort} showValue align="right" />
+        <div style={cs("display:flex;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--paper);flex:none")}>
+          {[["cards", "Cards", v.setLayoutCards, v.layoutCards], ["table", "Table", v.setLayoutTable, v.layoutTable]].map(([key, label, go, on]) => (
+            <button key={key} onClick={go} style={cs(`height:32px;padding:0 12px;border:0;border-radius:7px;background:${on ? "var(--ink)" : "transparent"};color:${on ? "var(--card)" : "var(--mute)"};font-size:12.5px;font-weight:600;cursor:pointer`)}>{label}</button>
+          ))}
+        </div>
       </div>
 
       <div style={cs("display:flex;gap:4px;padding:0 10px 10px;overflow-x:auto;scrollbar-width:none")}>
@@ -304,8 +299,147 @@ function DiscoverToolbar({ v }) {
         <FilterMenu title="Market cap" value={v.mcapFilter} options={v.mcapPresets} onChange={v.setMcapFilter} />
         <FilterMenu title="Launched" value={v.launchedFilter} options={v.launchedPresets} onChange={v.setLaunchedFilter} />
         <FilterMenu title="Pair" value={v.quoteFilter} options={v.quoteFilterOptions} onChange={v.setQuoteFilter} />
-        {!m && <div style={cs("flex:1;min-width:8px")}></div>}
-        {!m && summary}
+        <div style={cs("flex:1;min-width:8px")}></div>
+        <ResultCount v={v} />
+        {canClear && (
+          <button onClick={v.resetFilters} style={cs("height:30px;padding:0 11px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap")}>Clear</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- small screens ----------
+
+// The refining filters that are currently set, as removable chips. Sort counts
+// when it's off its default.
+function activeRefinements(v) {
+  const labelOf = (options, key) => (options.find((o) => o.key === key) || {}).label;
+  const chips = [];
+  if (v.sort !== v.sortOptions[0].key) chips.push({ key: "sort", label: v.sort, clear: () => v.setSort(v.sortOptions[0].key) });
+  if (v.mcapFilter !== "any") chips.push({ key: "mcap", label: labelOf(v.mcapPresets, v.mcapFilter), clear: () => v.setMcapFilter("any") });
+  if (v.launchedFilter !== "any") chips.push({ key: "launched", label: labelOf(v.launchedPresets, v.launchedFilter), clear: () => v.setLaunchedFilter("any") });
+  if (v.quoteFilter !== "any") chips.push({ key: "pair", label: labelOf(v.quoteFilterOptions, v.quoteFilter), clear: () => v.setQuoteFilter("any") });
+  return chips;
+}
+
+function MobileToolbar({ v }) {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const chips = activeRefinements(v);
+  const showSummary = chips.length > 0 || v.query || v.filterKey !== "All";
+  return (
+    <div style={cs("border:1px solid var(--line);border-radius:12px;background:var(--card);margin-bottom:14px")}>
+      <div style={cs("display:flex;align-items:center;gap:6px;padding:8px")}>
+        <SearchBox v={v} placeholder="Search tokens" height={38} fontSize="13px" />
+        <button onClick={() => setSheetOpen(true)} aria-label="Filters and sort"
+          style={cs(`flex:none;position:relative;display:flex;align-items:center;gap:6px;height:38px;padding:0 11px;border-radius:10px;border:1px solid ${chips.length ? "rgba(163,230,53,.55)" : "var(--line)"};background:${chips.length ? "rgba(163,230,53,.10)" : "var(--paper)"};color:var(--ink);font-size:12.5px;font-weight:600;cursor:pointer`)}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" />
+          </svg>
+          Filters
+          {chips.length > 0 && (
+            <span style={cs("min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:var(--lime);color:var(--on);font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center")}>{chips.length}</span>
+          )}
+        </button>
+      </div>
+
+      <div style={cs("display:flex;gap:3px;padding:0 8px 8px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch")}>
+        {v.familyTabs.map((t) => (
+          <button key={t.key} onClick={t.go}
+            style={cs(`flex:none;display:flex;align-items:center;gap:5px;height:30px;padding:0 10px;border:0;border-radius:8px;background:${t.active ? "var(--ink)" : "transparent"};color:${t.active ? "var(--card)" : "var(--mute)"};font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap`)}>
+            {t.label}
+            <span style={cs(`font-family:'JetBrains Mono',monospace;font-size:9.5px;opacity:${t.active ? ".75" : "1"}`)}>{t.count}</span>
+          </button>
+        ))}
+      </div>
+
+      {showSummary && (
+        <div style={cs("display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:7px 8px;border-top:1px solid var(--soft)")}>
+          {chips.map((c) => (
+            <button key={c.key} onClick={c.clear}
+              style={cs("display:flex;align-items:center;gap:5px;height:26px;padding:0 6px 0 9px;border-radius:999px;border:1px solid rgba(163,230,53,.45);background:rgba(163,230,53,.10);color:var(--ink);font-size:11.5px;font-weight:600;cursor:pointer;white-space:nowrap;max-width:100%")}>
+              <span style={cs("overflow:hidden;text-overflow:ellipsis")}>{c.label}</span>
+              <span style={cs("color:var(--lime);font-size:13px;line-height:1")}>×</span>
+            </button>
+          ))}
+          <div style={cs("margin-left:auto;flex:none;display:flex;align-items:center;gap:2px")}>
+            <ResultCount v={v} />
+            <button onClick={() => { v.setSort(v.sortOptions[0].key); v.resetFilters(); }} style={cs("height:26px;padding:0 4px 0 8px;border:0;background:transparent;color:var(--lime);font-size:11.5px;font-weight:600;cursor:pointer")}>Clear</button>
+          </div>
+        </div>
+      )}
+
+      {sheetOpen && <FilterSheet v={v} onClose={() => setSheetOpen(false)} />}
+    </div>
+  );
+}
+
+function OptionChips({ options, value, onChange }) {
+  return (
+    <div style={cs("display:flex;flex-wrap:wrap;gap:6px")}>
+      {options.map((o) => {
+        const on = o.key === value;
+        return (
+          <button key={o.key} onClick={() => onChange(o.key)}
+            style={cs(`display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:10px;border:1px solid ${on ? "var(--ink)" : "var(--line)"};background:${on ? "var(--ink)" : "var(--paper)"};color:${on ? "var(--card)" : "var(--ink)"};font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap`)}>
+            {o.label}
+            {o.count != null && <span style={cs("font-family:'JetBrains Mono',monospace;font-size:10px;opacity:.6")}>{o.count}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function SheetSection({ title, children }) {
+  return (
+    <div style={cs("padding:12px 0;border-bottom:1px solid var(--soft)")}>
+      <div style={cs("font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:var(--mute);margin-bottom:9px")}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+// Bottom sheet with every sort and filter as tappable options. Changes apply
+// immediately; the footer shows how many tokens match and closes the sheet.
+function FilterSheet({ v, onClose }) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => { document.body.style.overflow = prev; document.removeEventListener("keydown", onKey); };
+  }, [onClose]);
+  const canReset = activeRefinements(v).length > 0 || v.filterKey !== "All";
+  const familyOptions = v.familyTabs.map((t) => ({ key: t.key, label: t.label, count: t.count }));
+  return (
+    <div onClick={onClose} style={cs("position:fixed;inset:0;z-index:95;background:rgba(0,0,0,.6);display:flex;align-items:flex-end")}>
+      <div onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Filters"
+        style={cs("width:100%;max-height:86vh;display:flex;flex-direction:column;background:var(--card);border-top:1px solid var(--line);border-radius:16px 16px 0 0;animation:popin .18s ease both")}>
+        <div style={cs("display:flex;justify-content:center;padding:8px 0 2px")}>
+          <div style={cs("width:36px;height:4px;border-radius:99px;background:var(--input)")}></div>
+        </div>
+        <div style={cs("display:flex;align-items:center;justify-content:space-between;padding:6px 16px 8px")}>
+          <span style={cs("font-size:16px;font-weight:700;letter-spacing:-.02em")}>Filters</span>
+          <button onClick={onClose} aria-label="Close" style={cs("width:30px;height:30px;border:1px solid var(--line);border-radius:999px;background:var(--paper);color:var(--mute);font-size:16px;line-height:1;cursor:pointer")}>×</button>
+        </div>
+        <div style={cs("overflow-y:auto;padding:0 16px")}>
+          <SheetSection title="SORT BY"><OptionChips options={v.sortOptions} value={v.sort} onChange={v.setSort} /></SheetSection>
+          <SheetSection title="TYPE">
+            <OptionChips options={familyOptions} value={v.filterKey} onChange={(key) => v.familyTabs.find((t) => t.key === key).go()} />
+          </SheetSection>
+          <SheetSection title="MARKET CAP"><OptionChips options={v.mcapPresets} value={v.mcapFilter} onChange={v.setMcapFilter} /></SheetSection>
+          <SheetSection title="LAUNCHED"><OptionChips options={v.launchedPresets} value={v.launchedFilter} onChange={v.setLaunchedFilter} /></SheetSection>
+          <SheetSection title="PAIR"><OptionChips options={v.quoteFilterOptions} value={v.quoteFilter} onChange={v.setQuoteFilter} /></SheetSection>
+        </div>
+        <div style={cs("display:flex;gap:8px;padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line)")}>
+          <button onClick={() => { v.setSort(v.sortOptions[0].key); v.resetFilters(); }} disabled={!canReset}
+            style={cs(`height:44px;padding:0 16px;border:1px solid var(--line);border-radius:11px;background:transparent;color:${canReset ? "var(--ink)" : "var(--mute)"};font-size:14px;font-weight:600;cursor:pointer`)}>Reset</button>
+          <button onClick={onClose}
+            style={cs("flex:1;height:44px;border:0;border-radius:11px;background:var(--lime);color:var(--on);font-size:14px;font-weight:700;cursor:pointer")}>
+            Show {v.resultCount} {v.resultCount === 1 ? "token" : "tokens"}
+          </button>
+        </div>
       </div>
     </div>
   );
