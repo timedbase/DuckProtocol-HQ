@@ -70,31 +70,98 @@ function quoteRows(tokens) {
   return tokens.map(([symbol, decimals, addr]) => addrRow(symbol, `${decimals} decimals`, addr)).join("");
 }
 
+// ---- Components. Pages compose these instead of hand-writing layout markup; app.js wires up the
+// interactive parts (tabs, copy buttons) and styles live in index.html.
+
+// A labelled code block. `html` is pre-highlighted markup (<span class="k|s|m">).
+function code(label, html) {
+  return `<pre data-label="${label}"><code>${html}</code></pre>`;
+}
+// kind: "info" | "warn" | "tip"
+function callout(kind, title, html) {
+  return `<div class="callout ${kind}"><div class="callout-title">${title}</div><p>${html}</p></div>`;
+}
+// items: [{ href, title, desc, tag? }]
+function cards(items) {
+  return `<div class="cards">${items.map((c) => `
+    <a class="card" href="${c.href}">
+      ${c.tag ? `<span class="card-tag">${c.tag}</span>` : ""}
+      <span class="card-title">${c.title}<span>→</span></span>
+      <span class="card-desc">${c.desc}</span>
+    </a>`).join("")}</div>`;
+}
+// items: [{ title, body }] -- numbered automatically
+function steps(items) {
+  return `<div class="steps">${items.map((s) => `
+    <div class="step"><div class="step-body"><div class="step-title">${s.title}</div>${s.body}</div></div>`).join("")}</div>`;
+}
+// items: [{ label, body }] -- first tab starts active
+function tabs(items) {
+  return `<div class="tabs">
+    <div class="tab-list">${items.map((t, i) => `<button class="tab-btn${i === 0 ? " active" : ""}" type="button">${t.label}</button>`).join("")}</div>
+    ${items.map((t, i) => `<div class="tab-panel${i === 0 ? " active" : ""}">${t.body}</div>`).join("")}
+  </div>`;
+}
+// head: ["Col", ...], rows: [["cell html", ...], ...]
+function table(head, rows) {
+  return `<table class="data"><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</table>`;
+}
+// items: [["Label", "value html"], ...]
+function stats(items) {
+  return `<div class="kv">${items.map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`).join("")}</div>`;
+}
+function chips(items) {
+  return `<div class="chips">${items.map((c) => `<span class="chip">${c}</span>`).join("")}</div>`;
+}
+// { title, body, chips?: [...], actions?: [{ href, label, primary? }] }
+function hero(h) {
+  return `<section class="hero">
+    ${h.chips ? chips(h.chips) : ""}
+    <h2>${h.title}</h2>
+    <p>${h.body}</p>
+    ${h.actions ? `<div class="actions">${h.actions.map((a) => `<a class="btn${a.primary ? " primary" : ""}" href="${a.href}">${a.label}</a>`).join("")}</div>` : ""}
+  </section>`;
+}
+
 const PAGES = {
 
 overview: {
   lede: "DuckProtocol is a token launchpad and lending stack on Robinhood Chain (4663) and Ink (57073) -- three independent ways to launch a token, all sharing the same fee hook, holder rewards, and per-token lending and governance.",
   body: `
-    <h2 id="three-families">Three launch families, one shared core</h2>
-    <p>Every token launched through DuckProtocol is an <strong>EIP-1167 minimal-proxy clone</strong> of one shared <code>DuckToken</code> implementation, trades through <a href="#/hook">DuckHookV4</a> once it has a pool, and sits on <a href="#/liquidity">full-range liquidity that can never be removed</a>. The families only differ in <em>how a token gets from zero to a tradeable pool</em>:</p>
-    <table class="data">
-      <tr><th>Family</th><th>Contract</th><th>How it reaches a pool</th></tr>
-      <tr><td><a href="#/bonding-curve">Bonding Curve</a></td><td class="mono">DuckBondingCurve</td><td>Tradeable immediately on an internal curve; migrates into a Uniswap V4 pool at a creator-set target</td></tr>
-      <tr><td><a href="#/instant">Instant</a></td><td class="mono">DuckLauncher</td><td>One transaction mints the supply straight into a V4 pool -- no curve phase</td></tr>
-      <tr><td><a href="#/crowdfund">Crowdfund Raise</a></td><td class="mono">DuckCrowdfund</td><td>Collects contributions toward a goal; the pool is seeded only on a successful finalize</td></tr>
-    </table>
-    <h2 id="what-makes-it-different">What's structurally different here</h2>
-    <ul>
-      <li><strong>No oracle for launch parameters.</strong> Every target a creator sets is a raw amount in their chosen quote asset. The app lets creators type these in USD and converts them at submit time -- see <a href="#/pricing">USD Pricing</a>.</li>
-      <li><strong>One trading fee, shared out on claim.</strong> Pools have no LP fee. The hook's own fee is split between the platform, the token's holders, and the creator's chosen creator / vault / burn mix -- see <a href="#/fees">Fees</a>.</li>
-      <li><strong>Holders get paid.</strong> 5% of every claimed fee funds a 12-hour, time-weighted reward round for the token's holders -- see <a href="#/holder-rewards">Holder rewards</a>.</li>
-      <li><strong>Built to integrate.</strong> Every action is a permissionless contract call, and a public REST API serves token, trade and price data for both chains -- see the <a href="#/integrate">integration quickstart</a> and <a href="llms.txt">llms.txt</a>.</li>
-      <li><strong>Every token gets its own lending market</strong>, funded by its vault share of fees, and governed by its own holders -- see <a href="#/vault">DuckVault</a> and <a href="#/governance">Governance</a>.</li>
-    </ul>
-    <div class="callout info">
-      <div class="callout-title">🦆 Two chains, one set of addresses</div>
-      <p>The protocol was deployed with CREATE2 from the same deployer on <strong>Robinhood Chain</strong> and <strong>Ink</strong>, so every DuckProtocol address is identical on both -- except <code>DuckHookV4</code>, whose address depends on the chain's PoolManager. Tokens, pools and vaults are separate per chain. See <a href="#/addresses">Contract Addresses</a>.</p>
-    </div>
+    ${hero({
+      chips: ["Robinhood Chain <b>4663</b>", "Ink <b>57073</b>", "Uniswap V4"],
+      title: "Launch, trade and lend from one protocol",
+      body: "Pick how a token reaches its pool, set its fee and where that fee goes, and every token gets locked liquidity, paid holders and its own lending market.",
+      actions: [
+        { href: "#/integrate", label: "Start integrating →", primary: true },
+        { href: "#/fees", label: "How fees work" },
+        { href: "#/addresses", label: "Contract addresses" },
+      ],
+    })}
+
+    <h2 id="three-families">Three ways to launch</h2>
+    <p>Every token is an EIP-1167 clone of one shared <code>DuckToken</code>, trades through <a href="#/hook">DuckHookV4</a> once it has a pool, and sits on <a href="#/liquidity">liquidity that can never be removed</a>. The families only differ in how a token gets from zero to a tradeable pool.</p>
+    ${cards([
+      { href: "#/bonding-curve", tag: "DuckBondingCurve", title: "Bonding Curve", desc: "Trades on an internal curve from block one, then migrates into a V4 pool at a creator-set target." },
+      { href: "#/instant", tag: "DuckLauncher", title: "Instant", desc: "One transaction mints the supply into a V4 pool. No curve phase, any quote token." },
+      { href: "#/crowdfund", tag: "DuckCrowdfund", title: "Crowdfund Raise", desc: "Collects contributions toward a goal; the pool is seeded only if the raise succeeds." },
+    ])}
+
+    <h2 id="shared-core">What every token gets</h2>
+    ${stats([
+      ["Trading fee", "2–10% <small>buys &amp; sells</small>"],
+      ["To holders", "5% <small>of claimed fees</small>"],
+      ["LP fee", "0 <small>fee tier</small>"],
+      ["Liquidity", "Locked <small>full range</small>"],
+    ])}
+    ${cards([
+      { href: "#/fees", tag: "Fees", title: "One fee, shared on claim", desc: "25% platform, 5% holders, and a creator / vault / burn split the creator picks at launch." },
+      { href: "#/holder-rewards", tag: "Rewards", title: "Holders get paid", desc: "12-hour rounds weighted by how long each holder held." },
+      { href: "#/vault", tag: "Lending", title: "A lending market per token", desc: "Funded by the vault share of fees and governed by the token's own holders." },
+      { href: "#/pricing", tag: "Pricing", title: "Create in USD", desc: "Targets are typed in dollars and converted to exact quote units at submit time." },
+    ])}
+
+    ${callout("info", "Two chains, one set of addresses", "DuckProtocol was deployed with CREATE2 from the same deployer on <strong>Robinhood Chain</strong> and <strong>Ink</strong>, so its addresses are identical on both -- except <code>DuckHookV4</code>, which depends on the chain's PoolManager. Tokens, pools and vaults are separate per chain. See <a href=\"#/addresses\">Contract Addresses</a>.")}
   `,
 },
 
@@ -396,28 +463,30 @@ integrate: {
   lede: "Everything you need to build on DuckProtocol: a launch button in your app, a trading bot, an aggregator route, or a dashboard.",
   body: `
     <h2 id="what-you-can-build">What you can build</h2>
-    <ul>
-      <li><strong>Launch tokens</strong> from your own app or bot through any of the three families -- see <a href="#/integrate-launch">Launching tokens</a>.</li>
-      <li><strong>Trade</strong> curve tokens against the curve, and pool tokens through Uniswap V4 -- see <a href="#/integrate-trade">Trading</a>.</li>
-      <li><strong>Read</strong> tokens, trades, holders, prices and campaigns from the REST API, or listen to contract events -- see <a href="#/integrate-data">Reading data &amp; events</a>.</li>
-      <li><strong>Automate</strong> fee claims and holder-reward payouts, which pay the caller -- see <a href="#/integrate-fees">Fees, rewards &amp; errors</a>.</li>
-    </ul>
+    ${cards([
+      { href: "#/integrate-launch", tag: "Contracts", title: "Launch tokens", desc: "A launch button in your app or bot, through any of the three families." },
+      { href: "#/integrate-trade", tag: "Contracts", title: "Trade", desc: "Curve buys and sells, and V4 pool swaps through the Universal Router." },
+      { href: "#/integrate-data", tag: "API · Events", title: "Read data", desc: "Tokens, trades, holders, prices and campaigns, or index the events yourself." },
+      { href: "#/integrate-fees", tag: "Automation", title: "Run triggers", desc: "Fee claims and holder payouts are permissionless -- and claims pay the caller." },
+    ])}
+
     <h2 id="chains">Chains</h2>
-    <table class="data">
-      <tr><th></th><th>Robinhood Chain</th><th>Ink</th></tr>
-      <tr><td>Chain ID</td><td class="mono">4663</td><td class="mono">57073</td></tr>
-      <tr><td>API prefix</td><td class="mono">/robinhood</td><td class="mono">/ink</td></tr>
-      <tr><td>Native currency</td><td>ETH</td><td>ETH</td></tr>
-    </table>
+    ${table(["", "Robinhood Chain", "Ink"], [
+      ["Chain ID", "<code>4663</code>", "<code>57073</code>"],
+      ["API prefix", "<code>/robinhood</code>", "<code>/ink</code>"],
+      ["Native currency", "ETH", "ETH"],
+      ["Router params", "6 fields (<code>minHopPriceX36</code>)", "5 fields"],
+    ])}
     <p>DuckProtocol's own contracts share one address on both chains; the hook, WETH and Uniswap contracts differ. Full list: <a href="#/addresses">Contract Addresses</a>.</p>
-    <h2 id="checklist">Integration checklist</h2>
-    <table class="data">
-      <tr><th>Need</th><th>Where</th></tr>
-      <tr><td>Contract addresses</td><td><a href="#/addresses">Contract Addresses</a></td></tr>
-      <tr><td>ABIs</td><td>The Duck-Protocol repository build output: <code>deploy/out/&lt;Contract&gt;.sol/&lt;Contract&gt;.json</code> (the <code>abi</code> field)</td></tr>
-      <tr><td>REST API</td><td><code>https://api.duckfun.family</code> -- see <a href="#/api">API Reference</a></td></tr>
-      <tr><td>Machine-readable summary</td><td><a href="llms.txt">llms.txt</a></td></tr>
-    </table>
+
+    <h2 id="checklist">What you'll need</h2>
+    ${table(["Need", "Where"], [
+      ["Contract addresses", "<a href=\"#/addresses\">Contract Addresses</a>"],
+      ["ABIs", "The Duck-Protocol repository build output: <code>deploy/out/&lt;Contract&gt;.sol/&lt;Contract&gt;.json</code> (the <code>abi</code> field)"],
+      ["REST API", "<code>https://api.duckpad.fun</code> -- see <a href=\"#/api\">API Reference</a>"],
+      ["Machine-readable summary", "<a href=\"llms.txt\">llms.txt</a>"],
+    ])}
+
     <h2 id="conventions">Conventions</h2>
     <ul>
       <li><strong>Native ETH is <code>address(0)</code></strong> wherever a quote asset is expected.</li>
@@ -426,7 +495,7 @@ integrate: {
       <li><strong>Launched token addresses end in <code>8888</code></strong> -- the create call reverts with <code>VanityAddressRequired</code> otherwise. You mine the salt client-side; see <a href="#/integrate-launch">Launching tokens</a>.</li>
       <li>The examples in this guide use <a href="https://viem.sh" target="_blank" rel="noreferrer">viem</a>; any EVM library works the same way.</li>
     </ul>
-    <pre><code><span class="k">import</span> { createPublicClient, createWalletClient, http, defineChain } <span class="k">from</span> <span class="s">"viem"</span>;
+    <pre data-label="viem · client setup"><code><span class="k">import</span> { createPublicClient, createWalletClient, http, defineChain } <span class="k">from</span> <span class="s">"viem"</span>;
 
 <span class="k">const</span> robinhood = defineChain({
   id: 4663, name: <span class="s">"Robinhood Chain"</span>,
@@ -599,11 +668,25 @@ integrate: {
 
     <h2 id="swap">5. Swap through the Universal Router</h2>
     <p>One <code>V4_SWAP</code> command (<code>0x10</code>) with three actions: <code>SWAP_EXACT_IN_SINGLE</code> (<code>0x06</code>), <code>SETTLE_ALL</code> (<code>0x0c</code>), <code>TAKE_ALL</code> (<code>0x0f</code>).</p>
-    <div class="callout warn">
-      <div class="callout-title">Robinhood Chain's router takes one extra field</div>
-      <p>Robinhood Chain's Universal Router is a fork whose <code>ExactInputSingleParams</code> has a 6th field, <code>uint256 minHopPriceX36</code>, before <code>hookData</code>. Ink's router uses the standard 5 fields. Encoding the wrong shape produces a garbage swap, so branch on the chain. Pass <code>0</code> for no per-hop floor.</p>
-    </div>
-    <pre><code><span class="k">const</span> poolKeyType = { type: <span class="s">"tuple"</span>, name: <span class="s">"poolKey"</span>, components: [
+    ${callout("warn", "Robinhood Chain's router takes one extra field", "Robinhood Chain's Universal Router is a fork whose <code>ExactInputSingleParams</code> has a 6th field, <code>uint256 minHopPriceX36</code>, before <code>hookData</code>. Ink's router uses the standard 5 fields. Encoding the wrong shape produces a garbage swap, so branch on the chain. Pass <code>0</code> for no per-hop floor.")}
+    ${tabs([
+      { label: "Robinhood Chain · 4663", body: code("solidity · ExactInputSingleParams", `<span class="k">struct</span> ExactInputSingleParams {
+  PoolKey poolKey;
+  <span class="k">bool</span> zeroForOne;
+  <span class="k">uint128</span> amountIn;
+  <span class="k">uint128</span> amountOutMinimum;
+  <span class="k">uint256</span> minHopPriceX36;   <span class="m">// Robinhood fork only -- pass 0</span>
+  <span class="k">bytes</span> hookData;
+}`) },
+      { label: "Ink · 57073", body: code("solidity · ExactInputSingleParams", `<span class="k">struct</span> ExactInputSingleParams {
+  PoolKey poolKey;
+  <span class="k">bool</span> zeroForOne;
+  <span class="k">uint128</span> amountIn;
+  <span class="k">uint128</span> amountOutMinimum;
+  <span class="k">bytes</span> hookData;
+}`) },
+    ])}
+    <pre data-label="viem · encode and send the swap"><code><span class="k">const</span> poolKeyType = { type: <span class="s">"tuple"</span>, name: <span class="s">"poolKey"</span>, components: [
   { type: <span class="s">"address"</span>, name: <span class="s">"currency0"</span> }, { type: <span class="s">"address"</span>, name: <span class="s">"currency1"</span> },
   { type: <span class="s">"uint24"</span>, name: <span class="s">"fee"</span> }, { type: <span class="s">"int24"</span>, name: <span class="s">"tickSpacing"</span> }, { type: <span class="s">"address"</span>, name: <span class="s">"hooks"</span> },
 ]};
@@ -643,11 +726,11 @@ integrate: {
   lede: "Use the REST API for indexed data and USD values, contract reads for live state, and events if you run your own indexer.",
   body: `
     <h2 id="api">REST API</h2>
-    <p>Base URL <code>https://api.duckfun.family</code>. Every data route is prefixed with the chain: <code>/robinhood</code> or <code>/ink</code>. Responses are JSON; errors are <code>{ "error": "..." }</code> with a 4xx/5xx status. Rate limit: 120 requests per minute per IP. Full list: <a href="#/api">API Reference</a>.</p>
-    <pre><code>GET https://api.duckfun.family/ink/tokens?family=INSTANT&amp;limit=20
-GET https://api.duckfun.family/robinhood/tokens/0x…8888
-GET https://api.duckfun.family/robinhood/tokens/0x…8888/trades?limit=50&amp;offset=0
-GET https://api.duckfun.family/ink/price?tokens=0x0000000000000000000000000000000000000000</code></pre>
+    <p>Base URL <code>https://api.duckpad.fun</code>. Every data route is prefixed with the chain: <code>/robinhood</code> or <code>/ink</code>. Responses are JSON; errors are <code>{ "error": "..." }</code> with a 4xx/5xx status. Rate limit: 120 requests per minute per IP. Full list: <a href="#/api">API Reference</a>.</p>
+    <pre><code>GET https://api.duckpad.fun/ink/tokens?family=INSTANT&amp;limit=20
+GET https://api.duckpad.fun/robinhood/tokens/0x…8888
+GET https://api.duckpad.fun/robinhood/tokens/0x…8888/trades?limit=50&amp;offset=0
+GET https://api.duckpad.fun/ink/price?tokens=0x0000000000000000000000000000000000000000</code></pre>
     <h3 id="token-fields">Token fields</h3>
     <table class="data">
       <tr><th>Field</th><th>Meaning</th></tr>
@@ -758,8 +841,9 @@ addresses: {
       ${addrRow("DuckTokenGovernorFactory", "Per-token governor + timelock deployment", "0x29e600073c29b4f646C54c78AeE97aE8AE888999")}
       ${addrRow("DuckToken impl.", "EIP-1167 clone template, shared by all three families", "0x83A491C728b0485A887fE9D7360C4Ae7eF8B1461")}
     </table>
-    <h2 id="robinhood">Robinhood Chain</h2>
-    <table class="data">
+    <h2 id="per-chain">Per-chain contracts</h2>
+    ${tabs([
+      { label: "Robinhood Chain · 4663", body: `<table class="data">
       ${addrRow("DuckHookV4", "Trading fee, fee claims, CTO", "0x483b529fa121c5402778a511A98fB326940042CC")}
       ${addrRow("WETH", "Wrapped native ETH", "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73")}
       ${addrRow("Uniswap V4 PoolManager", "V4 singleton", "0x8366a39CC670B4001A1121B8F6A443A643e40951")}
@@ -768,9 +852,8 @@ addresses: {
       ${addrRow("Uniswap V4 Quoter", "Swap previews", "0x8dc178EFb8111bB0973dd9d722ebeFF267c98f94")}
       ${addrRow("Uniswap V4 StateView", "Pool state reads", "0xF3334192D15450CdD385c8B70e03f9A6bD9E673b")}
       ${addrRow("Permit2", "Canonical Permit2", "0x000000000022D473030F116dDEE9F6B43aC78BA3")}
-    </table>
-    <h2 id="ink">Ink</h2>
-    <table class="data">
+    </table>` },
+      { label: "Ink · 57073", body: `<table class="data">
       ${addrRow("DuckHookV4", "Trading fee, fee claims, CTO", "0x5a05a1f0A101237D8c350EFfA54f4b3c9bc142cc")}
       ${addrRow("WETH", "Wrapped native ETH", "0x4200000000000000000000000000000000000006")}
       ${addrRow("Uniswap V4 PoolManager", "V4 singleton", "0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32")}
@@ -779,11 +862,12 @@ addresses: {
       ${addrRow("Uniswap V4 Quoter", "Swap previews", "0x3972C00f7ed4885e145823eb7C655375d275A1C5")}
       ${addrRow("Uniswap V4 StateView", "Pool state reads", "0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990")}
       ${addrRow("Permit2", "Canonical Permit2", "0x000000000022D473030F116dDEE9F6B43aC78BA3")}
-    </table>
+    </table>` },
+    ])}
     <h2 id="quote-tokens">Curated quote tokens</h2>
     <p>Bonding Curve and Crowdfund accept these (plus native ETH) unless the owner changes the list on-chain; Instant accepts any token. Every token below has native-ETH swap routes configured on all three families.</p>
-    <h3 id="quote-robinhood">Robinhood Chain</h3>
-    <table class="data">
+    ${tabs([
+      { label: "Robinhood Chain · 16", body: `<table class="data">
       ${quoteRows([
         ["USDG", 6, "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"], ["U", 18, "0xcE24439F2D9C6a2289F741120FE202248B666666"],
         ["cbBTC", 8, "0xCEC185eB182c47d1bA1EFc84e6959e18cd620Be4"], ["TAO", 18, "0xf3081494B87e8D5fb7960f066E931D1D0e6E3d67"],
@@ -794,9 +878,8 @@ addresses: {
         ["MSTR", 18, "0xec262a75e413fAfD0dF80480274532C79D42da09"], ["SPCX", 18, "0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa"],
         ["GME", 18, "0x1b0E319c6A659F002271B69dB8A7df2F911c153E"], ["GLD", 18, "0xC9a981FEE1F9DEc688bb123ccDeCc63D0deBFC4e"],
       ])}
-    </table>
-    <h3 id="quote-ink">Ink</h3>
-    <p>Ink's tokenized stocks trade against USDG on Uniswap v3, so their routes go ETH → USDG → stock.</p>
+    </table>` },
+      { label: "Ink · 11", body: `<p>Ink's tokenized stocks trade against USDG on Uniswap v3, so their routes go ETH → USDG → stock.</p>
     <table class="data">
       ${quoteRows([
         ["USDT0", 6, "0x0200C29006150606B650577BBE7B6248F58470c1"], ["USDG", 6, "0xe343167631d89B6Ffc58B88d6b7fB0228795491D"],
@@ -806,7 +889,8 @@ addresses: {
         ["wMSTRx", 18, "0x30987adF0B11dc698438a99BA04ec3a1AB2c7EaB"], ["wSPCXx", 18, "0x8e2eeD8b8B5E13Ea7BF38e50d7821d2C57309072"],
         ["wNFLXx", 18, "0x7d87fD6A379714194a797c0bBB8B40c30D250856"],
       ])}
-    </table>
+    </table>` },
+    ])}
   `,
 },
 

@@ -1,26 +1,26 @@
-# DuckProtocol (duckfun.family)
+# DuckProtocol (duckpad.fun)
 
 > DuckProtocol is a token launchpad with per-token lending and governance on Robinhood Chain (chain id 4663) and Ink (chain id 57073). Tokens launch through a bonding curve, an instant Uniswap V4 pool, or a crowdfund. Every pool is a Uniswap V4 pool with fee tier 0, tick spacing 200, and the chain's DuckHookV4 hook, which takes a 2-10% trading fee in the quote currency on buys and sells. All actions are permissionless contract calls; a public REST API serves token, trade, holder and USD price data.
 
-Docs: https://docs.duckfun.family
-App: https://duckfun.family
-API base: https://api.duckfun.family (routes prefixed /robinhood or /ink)
+Docs: https://docs.duckpad.fun
+App: https://duckpad.fun
+API base: https://api.duckpad.fun (routes prefixed /robinhood or /ink)
 
 ## Docs
 
-- [Overview](https://docs.duckfun.family/#/overview): the three launch families and shared core
-- [Integration quickstart](https://docs.duckfun.family/#/integrate): chains, addresses, ABIs, conventions
-- [Launching tokens](https://docs.duckfun.family/#/integrate-launch): vanity salt mining and createToken / launch calls
-- [Trading](https://docs.duckfun.family/#/integrate-trade): curve trades, V4 PoolKey, Quoter, Universal Router encoding
-- [Reading data & events](https://docs.duckfun.family/#/integrate-data): REST fields, live reads, event signatures
-- [Fees, rewards & errors](https://docs.duckfun.family/#/integrate-fees): claimFees, processBatch, triggerBuyback, error names
-- [DuckHookV4](https://docs.duckfun.family/#/hook): trading fee, fee claims, same-block guard, CTO
-- [Fees & Supply Tiers](https://docs.duckfun.family/#/fees)
-- [Holder rewards](https://docs.duckfun.family/#/holder-rewards)
-- [DuckVault lending](https://docs.duckfun.family/#/vault) and [Governance](https://docs.duckfun.family/#/governance)
-- [USD pricing](https://docs.duckfun.family/#/pricing)
-- [API reference](https://docs.duckfun.family/#/api)
-- [Contract addresses](https://docs.duckfun.family/#/addresses)
+- [Overview](https://docs.duckpad.fun/#/overview): the three launch families and shared core
+- [Integration quickstart](https://docs.duckpad.fun/#/integrate): chains, addresses, ABIs, conventions
+- [Launching tokens](https://docs.duckpad.fun/#/integrate-launch): vanity salt mining and createToken / launch calls
+- [Trading](https://docs.duckpad.fun/#/integrate-trade): curve trades, V4 PoolKey, Quoter, Universal Router encoding
+- [Reading data & events](https://docs.duckpad.fun/#/integrate-data): REST fields, live reads, event signatures
+- [Fees, rewards & errors](https://docs.duckpad.fun/#/integrate-fees): claimFees, processBatch, triggerBuyback, error names
+- [DuckHookV4](https://docs.duckpad.fun/#/hook): trading fee, fee claims, same-block guard, CTO
+- [Fees & Supply Tiers](https://docs.duckpad.fun/#/fees)
+- [Holder rewards](https://docs.duckpad.fun/#/holder-rewards)
+- [DuckVault lending](https://docs.duckpad.fun/#/vault) and [Governance](https://docs.duckpad.fun/#/governance)
+- [USD pricing](https://docs.duckpad.fun/#/pricing)
+- [API reference](https://docs.duckpad.fun/#/api)
+- [Contract addresses](https://docs.duckpad.fun/#/addresses)
 
 ## Contract addresses
 
@@ -112,7 +112,7 @@ With a pool (migrated curve token, instant token, successful crowdfund):
 
 ## REST API
 
-Base https://api.duckfun.family, 120 requests/minute per IP, JSON, errors as { "error": "..." }.
+Base https://api.duckpad.fun, 120 requests/minute per IP, JSON, errors as { "error": "..." }.
 - GET /{chain}/tokens?family=CURVE|INSTANT|CAMPAIGN&limit&offset
 - GET /{chain}/tokens/{address} (includes pool registration)
 - GET /{chain}/tokens/{address}/trades?limit&offset -> { items: [{ side, quoteAmount, tokenAmount, priceUSD, volumeUSD, trader, timestamp, txHash }], total }
