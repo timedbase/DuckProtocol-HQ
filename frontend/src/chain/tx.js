@@ -1,18 +1,12 @@
 import { getPublicClient, getWalletClient } from "./client.js";
 
 // Shared by actions.js and dex.js: simulateContract first (a plain eth_call
-// against real chain state — reverts surface here, before the wallet ever
-// prompts for a signature), then writeContract with the exact simulated
-// request. Gas is estimated with a buffer rather than trusting the wallet's
-// own eth_estimateGas outright — unused gas is always refunded, so a
-// generous buffer costs nothing when the tx succeeds with less. Both Ink and
-// Arc are standard chains with no HyperEVM-style small/big block split, so
-// neither needs any special-casing here.
+// against real chain state -- reverts surface here, before the wallet ever
+// prompts), then writeContract with the exact simulated request. Gas is the
+// estimate plus a 30% buffer; unused gas is refunded.
 //
-// `chain`: the resolved CHAINS[slug] config (see chain/addresses.js) the
-// call should target — every caller resolves this once (from the app's
-// selected chain) and threads it down, same pattern as every other
-// chain-aware function in this directory.
+// `chain`: the resolved CHAINS[slug] config the call targets, threaded down
+// from the app's selected chain.
 export async function simulateAndSend(chain, { address, abi, functionName, args, value, account }) {
   const { hash } = await simulateAndSendWithResult(chain, { address, abi, functionName, args, value, account });
   return hash;
@@ -20,7 +14,7 @@ export async function simulateAndSend(chain, { address, abi, functionName, args,
 
 // Same as simulateAndSend, but also hands back simulateContract's decoded
 // return value -- e.g. the created token's real address, or (for
-// DuckRaise.launch) its real campaignId -- straight from the same eth_call
+// DuckCrowdfund.launch) its real campaignId -- straight from the same eth_call
 // that already proves the tx succeeds. No guessing/prediction needed.
 // `dryRun`: stop after the simulate step -- used by the create flow's
 // "Simulate first" button to prove a launch would succeed (with the exact

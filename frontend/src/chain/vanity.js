@@ -1,6 +1,6 @@
 import { keccak256, encodeAbiParameters, concat, getAddress, pad, toHex } from "viem";
 
-// DuckIncubation, DuckLauncher and DuckRaise all clone their token template
+// DuckBondingCurve, DuckLauncher and DuckCrowdfund all clone their token template
 // via CREATE2 with the identical derivation (confirmed directly against
 // the Duck-Family-Contract repo's source, not just the shared test helper's comment):
 //   realSalt = keccak256(abi.encode(msg.sender, userSalt))

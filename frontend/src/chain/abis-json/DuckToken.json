@@ -16,6 +16,19 @@
   },
   {
     "type": "function",
+    "name": "BATCH_SIZE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "CLOCK_MODE",
     "inputs": [],
     "outputs": [
@@ -29,6 +42,19 @@
   },
   {
     "type": "function",
+    "name": "DISTRIBUTION_INTERVAL",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "DOMAIN_SEPARATOR",
     "inputs": [],
     "outputs": [
@@ -36,6 +62,19 @@
         "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_HOLDING_BPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -202,6 +241,32 @@
       }
     ],
     "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "depositHolderReward",
+    "inputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "distributing",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -502,7 +567,27 @@
   },
   {
     "type": "function",
+    "name": "poolManagerAddr",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "postLaunchUnlock",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "processBatch",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -516,34 +601,55 @@
   },
   {
     "type": "function",
-    "name": "rescueNative",
-    "inputs": [
+    "name": "rewardCurrency",
+    "inputs": [],
+    "outputs": [
       {
-        "name": "to",
+        "name": "",
         "type": "address",
         "internalType": "address"
       }
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "rescueTokens",
-    "inputs": [
+    "name": "rewardHook",
+    "inputs": [],
+    "outputs": [
       {
-        "name": "tokenAddr",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "to",
+        "name": "",
         "type": "address",
         "internalType": "address"
       }
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "roundPool",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "roundStart",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -553,6 +659,29 @@
         "name": "uri_",
         "type": "string",
         "internalType": "string"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setRewardConfig",
+    "inputs": [
+      {
+        "name": "hook_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "currency_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "poolManager_",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [],
@@ -766,8 +895,84 @@
   },
   {
     "type": "event",
+    "name": "DistributionRoundClosed",
+    "inputs": [
+      {
+        "name": "roundStart",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "pool",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "eligibleCount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "totalWeight",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "DistributionRoundFinished",
+    "inputs": [
+      {
+        "name": "roundStart",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "EIP712DomainChanged",
     "inputs": [],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "HolderRewardDeposited",
+    "inputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "HolderRewardPaid",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
     "anonymous": false
   },
   {
@@ -817,6 +1022,31 @@
   },
   {
     "type": "event",
+    "name": "RewardConfigSet",
+    "inputs": [
+      {
+        "name": "hook",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "currency",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "poolManager",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "Transfer",
     "inputs": [
       {
@@ -852,11 +1082,6 @@
       }
     ],
     "anonymous": false
-  },
-  {
-    "type": "error",
-    "name": "CannotRescueOwnToken",
-    "inputs": []
   },
   {
     "type": "error",
@@ -953,11 +1178,6 @@
   },
   {
     "type": "error",
-    "name": "NativeTransferFailed",
-    "inputs": []
-  },
-  {
-    "type": "error",
     "name": "NotInitializing",
     "inputs": []
   },
@@ -968,12 +1188,27 @@
   },
   {
     "type": "error",
+    "name": "NotRewardHook",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NotVaultFactory",
     "inputs": []
   },
   {
     "type": "error",
     "name": "PermitExpired",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Reentrant",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RewardConfigAlreadySet",
     "inputs": []
   },
   {

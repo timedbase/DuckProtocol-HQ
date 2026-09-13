@@ -1,9 +1,9 @@
 import { getPublicClient } from "./client.js";
 import { DUCK_TOKEN_ABI } from "./abis.js";
 
-// The subgraph doesn't index name/symbol for CURVE/INSTANT tokens -- neither
-// DuckIncubation's TokenCreated nor DuckLauncher's TokenLaunched carries
-// them (only DuckRaise's CampaignCreated does, since a campaign's name/
+// The API doesn't carry name/symbol for CURVE/INSTANT tokens -- neither
+// DuckBondingCurve's TokenCreated nor DuckLauncher's TokenLaunched carries
+// them (only DuckCrowdfund's CampaignCreated does, since a campaign's name/
 // symbol are chosen before the token itself exists). Every token clone is a
 // real ERC20 with its own name()/symbol() though, so this reads them
 // directly, batched into as few RPC round-trips as possible via multicall.

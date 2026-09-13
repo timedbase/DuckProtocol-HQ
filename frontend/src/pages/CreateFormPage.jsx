@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { parseAbi } from "viem";
 import { cs } from "../cs.js";
-import { CHAIN, SUPPLY_TIERS, VAULT_BPS_OPTIONS, HOOK_FEE_BPS_OPTIONS } from "../chain/addresses.js";
+import { SUPPLY_TIERS, FEE_SPLIT_OPTIONS, HOOK_FEE_BPS_OPTIONS } from "../chain/addresses.js";
 import { logoFor } from "../chain/quoteLogos.js";
 import { getPublicClient } from "../chain/client.js";
 import { api } from "../api.js";
@@ -21,17 +21,17 @@ const ERC20_SYMBOL_ABI = parseAbi(["function symbol() view returns (string)"]);
 // gets the real symbol instead of a placeholder -- never a guess, and it
 // naturally clears itself back to "?" if the field is edited to something
 // that isn't a deployed token.
-function useCustomQuoteSymbol(address, enabled) {
+function useCustomQuoteSymbol(chain, address, enabled) {
   const [state, setState] = useState({ symbol: null, loading: false, failed: false });
   useEffect(() => {
     if (!enabled || !ADDRESS_RE.test(address || "")) { setState({ symbol: null, loading: false, failed: false }); return; }
     let cancelled = false;
     setState({ symbol: null, loading: true, failed: false });
-    getPublicClient().readContract({ address, abi: ERC20_SYMBOL_ABI, functionName: "symbol" })
+    getPublicClient(chain).readContract({ address, abi: ERC20_SYMBOL_ABI, functionName: "symbol" })
       .then((s) => { if (!cancelled) setState({ symbol: s, loading: false, failed: false }); })
       .catch(() => { if (!cancelled) setState({ symbol: null, loading: false, failed: true }); });
     return () => { cancelled = true; };
-  }, [address, enabled]);
+  }, [chain, address, enabled]);
   return state;
 }
 
@@ -41,16 +41,16 @@ function useCustomQuoteSymbol(address, enabled) {
 // line under a USD input; the actual USD->raw-units conversion at submit
 // time is a separate, authoritative backend call (resolveQuoteUnits in
 // App.jsx), never derived from this cached preview price.
-function useQuotePrice(address) {
+function useQuotePrice(chain, address) {
   const [price, setPrice] = useState(null);
   useEffect(() => {
     if (!ADDRESS_RE.test(address || "")) { setPrice(null); return; }
     let cancelled = false;
-    api.quotePrices(CHAIN, [address]).then((res) => {
+    api.quotePrices(chain, [address]).then((res) => {
       if (!cancelled) setPrice(res?.prices?.[address] ?? null);
     }).catch(() => { if (!cancelled) setPrice(null); });
     return () => { cancelled = true; };
-  }, [address]);
+  }, [chain, address]);
   return price;
 }
 
@@ -135,17 +135,17 @@ function Section({ icon, step, title, sub, defaultOpen = true, children }) {
   );
 }
 
-function QuoteChips({ options, value, onPick, allowCustom, customQuote }) {
+function QuoteChips({ chain, options, value, onPick, allowCustom, customQuote }) {
   const isCustom = allowCustom && !options.some((o) => o.address.toLowerCase() === value.toLowerCase());
   return (
     <div style={cs("display:flex;flex-direction:column;gap:8px")}>
       <div style={cs("display:grid;grid-template-columns:repeat(3,1fr);gap:8px")}>
         {options.map((o) => {
           const active = !isCustom && value.toLowerCase() === o.address.toLowerCase();
-          const logo = logoFor(o.label);
+          const logo = logoFor(chain, o.label);
           return (
             <button key={o.address} onClick={() => onPick(o.address)} style={cs(`display:flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line);border-radius:8px;cursor:pointer;padding:9px 10px;font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:700;background:${active ? "var(--ink)" : "var(--card)"};color:${active ? "var(--card)" : "var(--ink)"}`)}>
-              <img src={logo} alt="" style={cs("width:18px;height:18px;border-radius:999px;flex:none;object-fit:cover")} />}
+              <img src={logo} alt="" style={cs("width:18px;height:18px;border-radius:999px;flex:none;object-fit:cover")} />
               <span>{o.label}</span>
             </button>
           );
@@ -209,19 +209,17 @@ function TierPicker({ value, onPick }) {
   );
 }
 
-// A 2x2 grid of the split itself (big) + a small "CREATOR / VAULT" caption,
-// instead of 4 full-width rows of the whole "100% creator / 0% vault"
-// sentence -- same 4 choices, about half the vertical space.
-function VaultBpsPicker({ value, onPick }) {
+// Creator / vault / burn presets for the creator's share of the trading fee,
+// as a compact grid of "C / V / B" percentages.
+function FeeSplitPicker({ value, onPick }) {
   return (
     <div style={cs("display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px")}>
-      {VAULT_BPS_OPTIONS.map((o) => {
-        const active = value === o.bps;
-        const vaultPct = o.bps / 100;
+      {FEE_SPLIT_OPTIONS.map((o) => {
+        const active = value.creatorBps === o.creatorBps && value.vaultBps === o.vaultBps && value.burnBps === o.burnBps;
         return (
-          <button key={o.bps} onClick={() => onPick(o.bps)} style={cs(`text-align:left;border:1px solid var(--line);border-radius:8px;cursor:pointer;padding:8px 10px;min-width:0;box-sizing:border-box;overflow:hidden;background:${active ? "var(--ink)" : "var(--card)"};color:${active ? "var(--card)" : "var(--ink)"}`)}>
-            <div style={cs("font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{100 - vaultPct}% / {vaultPct}%</div>
-            <div style={cs(`font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.08em;margin-top:2px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis`)}>CREATOR / VAULT</div>
+          <button key={`${o.creatorBps}-${o.vaultBps}-${o.burnBps}`} onClick={() => onPick(o)} style={cs(`text-align:left;border:1px solid var(--line);border-radius:8px;cursor:pointer;padding:8px 10px;min-width:0;box-sizing:border-box;overflow:hidden;background:${active ? "var(--ink)" : "var(--card)"};color:${active ? "var(--card)" : "var(--ink)"}`)}>
+            <div style={cs("font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis")}>{o.creatorBps / 100}% / {o.vaultBps / 100}% / {o.burnBps / 100}%</div>
+            <div style={cs(`font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.08em;margin-top:2px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis`)}>CREATOR / VAULT / BURN</div>
           </button>
         );
       })}
@@ -229,13 +227,11 @@ function VaultBpsPicker({ value, onPick }) {
   );
 }
 
-// Same 4-choice grid pattern as VaultBpsPicker, one row of flat percentages
-// instead of a split -- this is the pool's own trading fee (taken on both
-// buy and sell, see DuckHookV4.sol), the thing the CREATOR/VAULT split
-// above actually divides up.
+// One row of flat percentages -- the pool's own trading fee, taken in the
+// quote currency on both buys and sells (see DuckHookV4.sol).
 function HookFeeBpsPicker({ value, onPick }) {
   return (
-    <div style={cs("display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px")}>
+    <div style={cs("display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px")}>
       {HOOK_FEE_BPS_OPTIONS.map((o) => {
         const active = value === o.bps;
         return (
@@ -276,7 +272,7 @@ function LivePreview({ v, draft, FORM, quoteLabel, tierLabel }) {
           <span style={cs(`font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;padding:4px 9px;border-radius:999px;background:${FORM.accent};color:${FORM.accentFg}`)}>{FORM.title.toUpperCase()}</span>
           <span style={cs("font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;padding:4px 9px;border-radius:999px;border:1px solid var(--line);color:var(--mute)")}>{tierLabel} SUPPLY</span>
           <span style={cs("display:flex;align-items:center;gap:4px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;padding:3px 9px 3px 4px;border-radius:999px;border:1px solid var(--line);color:var(--mute)")}>
-            <img src={logoFor(quoteLabel)} alt="" style={cs("width:12px;height:12px;border-radius:999px;object-fit:cover;flex:none")} />
+            <img src={logoFor(v.chain, quoteLabel)} alt="" style={cs("width:12px;height:12px;border-radius:999px;object-fit:cover;flex:none")} />
             {quoteLabel}
           </span>
         </div>
@@ -289,22 +285,21 @@ const ON_SUBMIT = {
   incubation: [
     "Clone the shared DuckToken implementation and register the curve.",
     "A per-token lending vault is created immediately -- funded from your chosen creator/vault fee split, linked to a real market once this token migrates.",
-    "Attach DuckHookV4 so anti-MEV and the sell fee apply once it migrates.",
+    "Attach DuckHookV4 so the trading fee applies once it migrates.",
     "Optional creator buy settles through the curve in the same transaction.",
-    "At the migration target, DuckBondingCurve opens the V4 pool and locks LP.",
+    "At the migration target, DuckBondingCurve opens the V4 pool and adds full-range liquidity it can never remove.",
   ],
   launcher: [
     "Clone the shared DuckToken implementation and mint the full chosen supply.",
-    "The launcher initializes the pool directly and mints a full-range position.",
+    "The launcher initializes the pool and adds full-range liquidity it has no way to remove.",
     "A per-token lending vault is created and linked to the real pool in the same transaction.",
-    "The position transfers into DuckLocker, permanently locked.",
     "Optional instant buy routes through the new pool immediately.",
   ],
   raise: [
     "Clone the shared DuckToken implementation immediately, verifiable on the explorer before a single contribution.",
     "Full chosen supply is minted to the crowdfund contract. No transfers, no pool, no price.",
     "Contributions accrue directly in your chosen quote asset until the deadline -- never swapped, so there's no sandwich-attack window at finalize.",
-    "Goal cleared → the raised quote asset seeds a two-sided V4 pool directly, a vault links to it, LP locks, claims open.",
+    "Goal cleared → the raised quote asset seeds a two-sided V4 pool directly (liquidity can never be removed), a vault links to it, claims open.",
     "Goal missed → refunds unlock in the same asset contributed, one claim per contributor.",
   ],
 };
@@ -321,21 +316,21 @@ export default function CreateFormPage({ v }) {
     incubation: { title: "Bonding curve", accent: "var(--lime)", accentFg: "var(--on)", cta: "Create curve token",
       sub: "You pick the start and migration targets directly, in USD -- converted to your chosen quote asset's own units at submit time. Buyers receive tokens on every trade from block one." },
     launcher: { title: "Instant", accent: "var(--card)", accentFg: "var(--ink)", cta: "Launch on V4",
-      sub: "One transaction creates the V4 pool, mints a full-range LP position, and locks it permanently in DuckLocker. Any quote token is allowed -- launcher has no curated allow-list." },
+      sub: "One transaction creates the V4 pool and adds full-range liquidity that can never be removed. Any quote token is allowed -- launcher has no curated allow-list." },
     raise: { title: "Crowdfund raise", accent: "var(--orange)", accentFg: "#fff", cta: "Open raise",
       sub: "Like a bonding curve, but nothing trades while the raise runs. The token deploys immediately; contributions land directly in your chosen quote asset (never swapped), and backers claim pro-rata only after a successful finalize." },
   }[family];
 
   const costs = {
-    incubation: [{ k: "TRADING FEE", v: "Taken on every buy and sell via DuckHookV4 once migrated, split by your creator/vault choice above" }],
+    incubation: [{ k: "TRADING FEE", v: "Taken on every buy and sell via DuckHookV4 once migrated" }],
     launcher: [
-      { k: "POOL FEE / TICK SPACING", v: "10000 / 200 (1%)" },
-      { k: "TRADING FEE", v: "Taken on every buy and sell via DuckHookV4 from block one, split by your creator/vault choice above" },
+      { k: "POOL FEE TIER / TICK SPACING", v: "0 / 200 (no LP fee)" },
+      { k: "TRADING FEE", v: "Taken on every buy and sell via DuckHookV4 from block one" },
     ],
     raise: [
       { k: "CREATION FEE", v: v.raiseDefaults ? `${Number(v.raiseDefaults.campaignFee) / 1e18} ${v.nativeSymbol}, paid on launch (waived if quoted in the platform token)` : "loading…" },
       { k: "REFUND IF MISSED", v: "100%, in the same asset contributed" },
-      { k: "TRADING FEE", v: "Taken on every buy and sell via DuckHookV4 once the raise succeeds, split by your creator/vault choice above" },
+      { k: "TRADING FEE", v: "Taken on every buy and sell via DuckHookV4 once the raise succeeds" },
     ],
   }[family];
 
@@ -344,9 +339,9 @@ export default function CreateFormPage({ v }) {
   // Only launcher accepts a quote token outside the curated list -- that's
   // the one case labelFor alone can't name.
   const isCustomQuote = family === "launcher" && !quoteOpts.some((o) => o.address.toLowerCase() === quoteAddr.toLowerCase());
-  const customQuote = useCustomQuoteSymbol(quoteAddr, isCustomQuote);
+  const customQuote = useCustomQuoteSymbol(v.chain, quoteAddr, isCustomQuote);
   const quoteLbl = isCustomQuote ? (customQuote.symbol || "?") : labelFor(quoteOpts, quoteAddr);
-  const quotePrice = useQuotePrice(quoteAddr);
+  const quotePrice = useQuotePrice(v.chain, quoteAddr);
   const tierLbl = (SUPPLY_TIERS.find((t) => t.index === draft.supplyTier) || SUPPLY_TIERS[0]).label;
 
   return (
@@ -389,19 +384,19 @@ export default function CreateFormPage({ v }) {
             <Field label="TOTAL SUPPLY" hint="Fixed menu -- there is no free-form supply amount">
               <TierPicker value={draft.supplyTier} onPick={(tier) => setDraft({ supplyTier: tier })} />
             </Field>
-            <Field label="TRADING FEE" hint="Taken on every buy and sell once this token has a real pool">
+            <Field label="TRADING FEE" hint="Taken in the quote asset on every buy and sell once this token has a pool. When claimed: 25% to the platform, 5% to holders (paid every 12h, weighted by how long they've held at least 0.25% of supply), and the rest split as you choose below">
               <HookFeeBpsPicker value={draft.hookFeeBps} onPick={(bps) => setDraft({ hookFeeBps: bps })} />
             </Field>
-            <Field label="CREATOR / VAULT FEE SPLIT" hint="How the trading fee above gets divided -- the vault share funds this token's own lending market">
-              <VaultBpsPicker value={draft.vaultBps} onPick={(bps) => setDraft({ vaultBps: bps })} />
+            <Field label="CREATOR / VAULT / BURN SPLIT" hint="How the remaining 70% is divided -- the vault share funds this token's own lending market, the burn share buys the token back and burns it">
+              <FeeSplitPicker value={draft} onPick={(o) => setDraft({ creatorBps: o.creatorBps, vaultBps: o.vaultBps, burnBps: o.burnBps })} />
             </Field>
           </Section>
 
           <Section step={3} title="Find your perfect pair" sub="Choose what this token trades against, and set its pricing.">
             {family === "incubation" && (
               <>
-                <Field label="QUOTE ASSET" hint={`Curated list -- only these have a real ${v.nativeSymbol} route for buyWithNative; pick ${v.nativeSymbol} if unsure`}>
-                  <QuoteChips options={v.quoteOptions} value={v.draftCurve.quoteToken} onPick={(a) => v.setCurve({ quoteToken: a, earlyBuyAmount: "0" })} />
+                <Field label="QUOTE ASSET" hint={`Curated list for ${v.chainName} -- each has a native ${v.nativeSymbol} swap route; pick ${v.nativeSymbol} if unsure`}>
+                  <QuoteChips chain={v.chain} options={v.quoteOptions} value={v.draftCurve.quoteToken} onPick={(a) => v.setCurve({ quoteToken: a, earlyBuyAmount: "0" })} />
                 </Field>
                 <div style={cs(`display:grid;grid-template-columns:${v.isMobile ? "1fr" : "1fr 1fr"};gap:18px`)}>
                   <UsdField label="START TARGET (USD)" hint="Where the curve opens" placeholder="8000"
@@ -417,19 +412,19 @@ export default function CreateFormPage({ v }) {
             {family === "launcher" && (
               <>
                 <Field label="QUOTE ASSET" hint="Any token is allowed -- these are curated suggestions, or paste any other address">
-                  <QuoteChips options={v.quoteOptions} value={v.draftInstant.quoteToken} onPick={(a) => v.setInstant({ quoteToken: a, buyAmountHype: "0" })} allowCustom customQuote={customQuote} />
+                  <QuoteChips chain={v.chain} options={v.quoteOptions} value={v.draftInstant.quoteToken} onPick={(a) => v.setInstant({ quoteToken: a, buyAmountHype: "0" })} allowCustom customQuote={customQuote} />
                 </Field>
                 <UsdField label="LAUNCH MARKET CAP (USD)" hint="Virtual FDV the pool is seeded at" placeholder="10000"
                   value={v.draftInstant.launchMarketCapUsd} onChange={(val) => v.setInstant({ launchMarketCapUsd: val })}
                   quotePrice={quotePrice} quoteLabel={quoteLbl} />
-                <Field label="FEE / TICK SPACING"><LockedInput value="10000 / 200 (this platform's 1% pool convention)" /></Field>
+                <Field label="FEE TIER / TICK SPACING"><LockedInput value="0 / 200 (no LP fee -- the trading fee is the only fee)" /></Field>
               </>
             )}
 
             {family === "raise" && (
               <>
                 <Field label="QUOTE ASSET" hint="Contributions land directly in this asset -- never swapped, closing off any sandwich-attack window at finalize">
-                  <QuoteChips options={v.raiseQuoteOptions} value={v.draftCampaign.dexQuoteAsset} onPick={(a) => v.setCampaign({ dexQuoteAsset: a })} />
+                  <QuoteChips chain={v.chain} options={v.raiseQuoteOptions} value={v.draftCampaign.dexQuoteAsset} onPick={(a) => v.setCampaign({ dexQuoteAsset: a })} />
                 </Field>
                 <UsdField label="GOAL (USD)" hint="Soft floor -- missing it unlocks refunds in the same asset" placeholder="500"
                   value={v.draftCampaign.goalUsd} onChange={(val) => v.setCampaign({ goalUsd: val })}

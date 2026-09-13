@@ -3,7 +3,6 @@ import { cs } from "../cs.js";
 import Thumb from "../Thumb.jsx";
 import Sparkline from "../Sparkline.jsx";
 import { XIcon, TelegramIcon, GlobeIcon, VerifiedBadge, CrownIcon } from "../MetaChips.jsx";
-import { logoFor } from "../chain/quoteLogos.js";
 
 // buildSparkline (adapters.js) returns a flat "var(--soft)" placeholder row
 // whenever a token has no real trade history to chart yet (deliberately
@@ -34,7 +33,7 @@ function ImageBlock({ t, badgeSize = "9px", showQuote = true }) {
       <div style={cs("position:absolute;left:0;right:0;bottom:0;height:52%;background:linear-gradient(to top,rgba(16,16,16,.62),transparent);pointer-events:none")}></div>
       {showQuote && t.quote && (
         <span style={cs(`position:absolute;top:8px;left:8px;display:flex;align-items:center;gap:4px;padding:2px 8px 2px 3px;border-radius:999px;background:rgba(23,23,23,.78);color:#fff;font-family:'JetBrains Mono',monospace;font-size:${badgeSize};font-weight:600;letter-spacing:.02em;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35)`)}>
-          <img src={logoFor(t.quote)} alt="" style={cs("width:13px;height:13px;border-radius:999px;object-fit:cover;flex:none")} />
+          <img src={t.quoteLogo} alt="" style={cs("width:13px;height:13px;border-radius:999px;object-fit:cover;flex:none")} />
           {t.quote}
         </span>
       )}

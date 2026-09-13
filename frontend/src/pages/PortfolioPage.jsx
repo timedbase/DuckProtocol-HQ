@@ -1,6 +1,7 @@
 import { cs } from "../cs.js";
 import { ageLabel } from "../data.js";
 import { usdOrQuote } from "../adapters.js";
+import { quoteSymbol } from "../api.js";
 import Thumb from "../Thumb.jsx";
 
 export default function PortfolioPage({ v }) {
@@ -31,8 +32,8 @@ export default function PortfolioPage({ v }) {
       if (!camp) return null;
       const resolved = camp.succeeded || camp.failed;
       if (!resolved) return null;
-      if (camp.succeeded && !ct.claimed) return { title: camp.name + " allocation", sub: "DuckRaise · succeeded", cta: "Claim", bg: "var(--lime)", fg: "var(--on)", open: camp.token ? () => v.openToken(camp.token.id) : null };
-      if (camp.failed && !ct.refunded) return { title: camp.name + " refund", sub: (Number(ct.amount) / 1e18).toFixed(4) + " " + v.nativeSymbol + " · goal missed", cta: "Refund", bg: "var(--orange)", fg: "#fff", open: camp.token ? () => v.openToken(camp.token.id) : null };
+      if (camp.succeeded && !ct.claimed) return { title: camp.name + " allocation", sub: "DuckCrowdfund · succeeded", cta: "Claim", bg: "var(--lime)", fg: "var(--on)", open: camp.token ? () => v.openToken(camp.token.id) : null };
+      if (camp.failed && !ct.refunded) return { title: camp.name + " refund", sub: (Number(ct.amount) / 10 ** (camp.quoteDecimals ?? 18)).toFixed(4) + " " + quoteSymbol(v.chain, camp.dexQuoteAsset) + " · goal missed", cta: "Refund", bg: "var(--orange)", fg: "#fff", open: camp.token ? () => v.openToken(camp.token.id) : null };
       return null;
     })
     .filter(Boolean);
@@ -41,7 +42,7 @@ export default function PortfolioPage({ v }) {
     <div style={cs("display:flex;flex-direction:column;gap:16px")}>
       <div>
         <h1 style={cs(`margin:0 0 4px;font-size:${v.isMobile ? "26px" : "36px"};letter-spacing:-.045em;font-weight:700;line-height:1.05`)}>Portfolio</h1>
-        <div style={cs("font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--mute)")}>{v.accountShort} · INK</div>
+        <div style={cs("font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--mute)")}>{v.accountShort} · {v.chainName.toUpperCase()}</div>
       </div>
 
       <div style={cs("display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px")}>

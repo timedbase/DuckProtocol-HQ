@@ -17,7 +17,7 @@ import {
   createCurveToken, buyCurve, sellCurve, claimCurveFee,
   launchInstant,
   createCampaign, contributeCampaign, claimCampaign, claimCampaignRefund, finalizeCampaign, getRaiseDefaults,
-  claimFees, claimAllFees, getPosition, getPositionCreator, getPool, getCtoApplication,
+  claimHookFees, getPool, getCtoApplication,
   applyForCTO, getCtoFee, setHookFeeSplits, getHookFeeSplits, getHookAccruedFees,
   getNativeBalance, waitForTx, getPlatformTokens, getTokenBalance,
   borrowFromVault, repayVault, addVaultCollateral, withdrawVaultCollateral,
@@ -25,26 +25,30 @@ import {
 } from "./chain/actions.js";
 import { buyOnPoolDirect, sellOnPoolDirect } from "./chain/dex.js";
 import { previewCurveBuy, previewCurveSell, previewPoolBuyDirect, previewPoolSellDirect, applySlippage } from "./chain/quotes.js";
-import { ZERO_ADDRESS, CHAIN } from "./chain/addresses.js";
+import { ZERO_ADDRESS, CHAINS, CHAIN_LIST, DEFAULT_CHAIN_SLUG, isChainSlug } from "./chain/addresses.js";
+import { logoFor } from "./chain/quoteLogos.js";
 import { fetchTokenMeta, fetchTokenMetaUri } from "./chain/tokenMeta.js";
 import { findBlockedTerm } from "./moderation.js";
 import { resolveTokenImage, resolveTokenSocials, resolveTokenDescription, resolveTokenNameSymbol } from "./ipfs.js";
 
-// Single chain now (Robinhood only) -- these are kept as no-op stubs rather
-// than deleted outright, since s.chain / setChain / storeChain are still
-// threaded through a lot of existing state/UI plumbing below; simplest to
-// leave that plumbing in place pointed at one fixed value than to rip it
-// all out for this pass.
+// The selected chain is remembered per browser; a missing or stale value
+// falls back to the default chain.
+const CHAIN_STORAGE_KEY = "duckfun.chain";
 function loadStoredChain() {
-  return CHAIN.slug;
+  try {
+    const stored = window.localStorage.getItem(CHAIN_STORAGE_KEY);
+    return stored && isChainSlug(stored) ? stored : DEFAULT_CHAIN_SLUG;
+  } catch {
+    return DEFAULT_CHAIN_SLUG;
+  }
 }
-function storeChain(_slug) {
-  /* no-op -- only one chain exists */
+function storeChain(slug) {
+  try { window.localStorage.setItem(CHAIN_STORAGE_KEY, slug); } catch { /* storage unavailable */ }
 }
 
 const REFRESH_MS = 15000;
 const PAGE_SIZE = 10; // Trades/Holders tabs page at this size, both server- and client-side.
-const HEALTH_CHECK_MS = 30000; // matches the backend's own subgraph-poll interval (see backend/src/health.ts)
+const HEALTH_CHECK_MS = 30000; // matches the backend's own data-poll interval (see backend/src/health.ts)
 const GAS_RESERVE_WEI = parseEther("0.005");
 const INK = "var(--ink)", CARD = "var(--card)", LIME = "var(--lime)", ORANGE = "var(--orange)";
 
@@ -53,29 +57,13 @@ function truncateDecimals(numStr, decimals) {
   return frac.length > decimals ? `${whole}.${frac.slice(0, decimals)}` : numStr;
 }
 
-// Native currency first (always tradeable directly), then the platform's
-// default-allowed quote tokens, then that family's platformToken() (if the
-// owner has set one) -- fetched live, see getPlatformTokens.
-//
-// On Arc, native currency IS called "USDC" (see chain/addresses.js), and
-// the real ERC20 USDC mirror also reports symbol() "USDC" -- genuinely the
-// same underlying asset presented two ways (Circle's own docs: the ERC20
-// interface is just a view over the same native balance, not a separate
-// wrapped token). Showing both as separate picker chips would look like a
-// confusing duplicate, and they're not actually independent choices from a
-// user's perspective -- so a same-symbol ERC20 entry is merged into the
-// native option instead of listed separately: one "USDC" chip, carrying
-// both addresses so a caller that specifically needs the ERC20 form (V3,
-// which forbids native entirely) can still get at it via `erc20Address`.
-function quoteOptionsFor(chain, base, platformToken) {
-  const erc20Match = base.find((t) => t.symbol === chain.nativeSymbol);
-  const rest = base.filter((t) => t !== erc20Match);
+// Native currency first (always tradeable directly), then the chain's curated
+// quote tokens, then that family's platformToken() if the owner has set one
+// (fetched live, see getPlatformTokens).
+function quoteOptionsFor(chain, platformToken) {
   const options = [
-    {
-      label: chain.nativeSymbol, address: ZERO_ADDRESS,
-      erc20Address: erc20Match?.address ?? null, erc20Decimals: erc20Match?.decimals ?? null,
-    },
-    ...rest.map((t) => ({ label: t.symbol, address: t.address, decimals: t.decimals })),
+    { label: chain.nativeSymbol, address: ZERO_ADDRESS, decimals: 18 },
+    ...chain.DEFAULT_QUOTE_TOKENS.map((t) => ({ label: t.symbol, address: t.address, decimals: t.decimals })),
   ];
   if (platformToken && !options.some((o) => o.address.toLowerCase() === platformToken.address.toLowerCase())) {
     options.push({ label: platformToken.symbol, address: platformToken.address, decimals: platformToken.decimals });
@@ -85,7 +73,7 @@ function quoteOptionsFor(chain, base, platformToken) {
 
 function decimalsFor(chain, address, platformTokens = []) {
   if (address.toLowerCase() === ZERO_ADDRESS) return 18;
-  const all = [...chain.DEFAULT_QUOTE_TOKENS, ...chain.STOCK_QUOTE_TOKENS, ...platformTokens.filter(Boolean)];
+  const all = [...chain.DEFAULT_QUOTE_TOKENS, ...platformTokens.filter(Boolean)];
   const t = all.find((q) => q.address.toLowerCase() === address.toLowerCase());
   return t ? t.decimals : 18;
 }
@@ -197,19 +185,19 @@ export default function App() {
     previewOut: null, previewLoading: false, simulating: false,
     nativeBalance: 0n, quoteBalance: 0n, txPending: false, tx: null, toast: "",
     portfolio: EMPTY_PORTFOLIO, coins: [], coinsLoading: true, coinsError: "",
-    draftCurve: { name: "", ticker: "", desc: "", quoteToken: ZERO_ADDRESS, supplyTier: 0, vaultBps: 0, hookFeeBps: 200, startTargetUsd: "20000", migrationTargetUsd: "150000", earlyBuyAmount: "0", socials: EMPTY_SOCIALS },
-    draftInstant: { name: "", ticker: "", desc: "", quoteToken: ZERO_ADDRESS, supplyTier: 0, vaultBps: 0, hookFeeBps: 200, launchMarketCapUsd: "25000", buyAmountHype: "0", socials: EMPTY_SOCIALS },
-    draftCampaign: { name: "", ticker: "", desc: "", dexQuoteAsset: ZERO_ADDRESS, supplyTier: 0, vaultBps: 0, hookFeeBps: 200, goalUsd: "125000", socials: EMPTY_SOCIALS },
+    draftCurve: { name: "", ticker: "", desc: "", quoteToken: ZERO_ADDRESS, supplyTier: 0, creatorBps: 10000, vaultBps: 0, burnBps: 0, hookFeeBps: 200, startTargetUsd: "20000", migrationTargetUsd: "150000", earlyBuyAmount: "0", socials: EMPTY_SOCIALS },
+    draftInstant: { name: "", ticker: "", desc: "", quoteToken: ZERO_ADDRESS, supplyTier: 0, creatorBps: 10000, vaultBps: 0, burnBps: 0, hookFeeBps: 200, launchMarketCapUsd: "25000", buyAmountHype: "0", socials: EMPTY_SOCIALS },
+    draftCampaign: { name: "", ticker: "", desc: "", dexQuoteAsset: ZERO_ADDRESS, supplyTier: 0, creatorBps: 10000, vaultBps: 0, burnBps: 0, hookFeeBps: 200, goalUsd: "125000", socials: EMPTY_SOCIALS },
     draftImage: EMPTY_IMAGE,
     raiseDefaults: null, platformTokens: { incubation: null, launcher: null, raise: null },
     creatorData: null, creatorLoading: false,
     campaignDetail: null,
     vaultsLoading: false, vaultDetail: null, vaultConfigData: null,
     proposals: [], proposalsLoading: false, proposalDetail: null,
-    health: { ok: true, frontendMs: null, subgraphMs: null, checkedAt: null },
+    health: { ok: true, frontendMs: null, dataMs: null, checkedAt: null },
   });
   const set = useCallback((patch) => setS((st) => ({ ...st, ...(typeof patch === "function" ? patch(st) : patch) })), []);
-  const chain = CHAIN;
+  const chain = CHAINS[s.chain] || CHAINS[DEFAULT_CHAIN_SLUG];
 
   // Switching chains is pure app state, independent of the wallet's actual
   // connected network -- a disconnected user (or one connected to the OTHER
@@ -217,18 +205,18 @@ export default function App() {
   // match at the moment of an actual write (see runTx's guard below). Reset
   // every address-keyed piece of state and navigate home rather than
   // leaving a token/campaign/portfolio view open against the OLD chain's
-  // address under the NEW chain's data -- this matters because Ink and Arc
-  // have already been observed to share byte-identical contract addresses
-  // (same deployer nonce sequence), so carrying over a same-string address
-  // across a chain switch could silently resolve to a completely different,
-  // unrelated token/campaign.
+  // address under the NEW chain's data -- this matters because Robinhood Chain
+  // and Ink share byte-identical protocol addresses (same CREATE2 deployer),
+  // so carrying an address across a chain switch could silently resolve to a
+  // completely different, unrelated token/campaign.
   function setChain(next) {
     set({ chainMenuOpen: false });
     if (next === s.chain) return;
     storeChain(next);
     set((st) => ({
       chain: next, screen: "home", tokenId: null, family: null,
-      campaignDetail: null, creatorData: null, portfolio: EMPTY_PORTFOLIO,
+      campaignDetail: null, creatorData: null, portfolio: EMPTY_PORTFOLIO, nativeBalance: 0n, quoteBalance: 0n,
+      vaultDetail: null, proposals: [], proposalDetail: null, previewOut: null,
       coins: [], coinsLoading: true, raiseDefaults: null,
       platformTokens: { incubation: null, launcher: null, raise: null },
     }));
@@ -317,7 +305,7 @@ export default function App() {
       let coins = rows.map((t, i) => tokenToCoin(chain, t, i));
 
       // name/symbol are indexed directly on Token now -- this only fires
-      // for a token the subgraph hasn't reindexed yet since that field was
+      // for a token the backend hasn't picked up yet since that field was
       // added (or one from right before a redeploy), never in steady state.
       const missingMeta = coins.filter((c) => c.family !== "CAMPAIGN" && c.symbol === "???").map((c) => c.id);
       if (missingMeta.length > 0) {
@@ -356,7 +344,7 @@ export default function App() {
   }, [chain]);
 
   // A freshly-launched token isn't visible until (a) the tx is actually
-  // mined on Ink and (b) the subgraph indexes it -- both take real seconds
+  // mined and (b) the backend picks it up -- both take real seconds
   // that this can't shortcut. What it CAN shortcut is the frontend's own
   // polling gap: the ambient loadCoins loop only runs every REFRESH_MS
   // (15s), so a single blind refresh could otherwise leave the user
@@ -426,10 +414,10 @@ export default function App() {
   }, [account, refreshBalance, loadPortfolio, set]);
 
   // Real, measured system status for the persistent bottom bar: the backend
-  // occasionally times its own subgraph round-trip (see backend/src/
+  // occasionally times its own data round-trip (see backend/src/
   // health.ts) and reports the last reading via /health; this measures the
   // frontend's own round-trip to that same endpoint on top, so the bar
-  // reflects both legs -- API reachability AND subgraph health -- not a
+  // reflects both legs -- API reachability AND data health -- not a
   // hardcoded "synced".
   useEffect(() => {
     let cancelled = false;
@@ -438,19 +426,19 @@ export default function App() {
       try {
         const res = await api.health();
         if (cancelled) return;
-        // /health reports per-chain subgraph health -- read the CURRENTLY
+        // /health reports per-chain data health -- read the CURRENTLY
         // SELECTED chain's entry, not a hardcoded one, so the status bar
         // reflects whichever chain is actually being browsed.
-        const chainHealth = res.subgraph?.[s.chain];
+        const chainHealth = res.chains?.[s.chain];
         set({ health: {
           ok: res.ok && chainHealth?.ok !== false,
           frontendMs: Math.round(performance.now() - start),
-          subgraphMs: chainHealth?.latencyMs ?? null,
+          dataMs: chainHealth?.latencyMs ?? null,
           checkedAt: Date.now(),
         } });
       } catch {
         if (cancelled) return;
-        set({ health: { ok: false, frontendMs: null, subgraphMs: null, checkedAt: Date.now() } });
+        set({ health: { ok: false, frontendMs: null, dataMs: null, checkedAt: Date.now() } });
       }
     }
     checkHealth();
@@ -497,7 +485,7 @@ export default function App() {
     loadTokenMeta(address, knownMetaUri, overrideUri, knownImageUrl);
     await Promise.all([fetchTradesPage(address, 1), fetchHoldersPage(address, 1)]);
     // Comments are Postgres-backed, a different and newer subsystem than
-    // the subgraph-sourced trades/holders above -- fired independently so a
+    // the API-sourced trades/holders above -- fired independently so a
     // DB hiccup (or a deployment with DATABASE_URL not set yet) leaves the
     // rest of the page working, not fails it too.
     fetchCommentsPage(address, 1);
@@ -521,7 +509,7 @@ export default function App() {
           ...st,
           coins: st.coins.map((c) => c.id === address ? {
             ...c,
-            trades: res.items.map((tr) => tradeToRow(chain, tr, labels, coin.quote)),
+            trades: res.items.map((tr) => tradeToRow(chain, tr, labels, coin.quote, coin.quoteDecimals)),
             rawTrades: res.items, tradesTotal: res.total,
           } : c),
         };
@@ -620,7 +608,7 @@ export default function App() {
   }
   function openToken(rawId) {
     // Case-insensitive lookup: a /0x... URL typed or pasted from a block
-    // explorer often carries EIP-55 checksummed casing, while subgraph ids
+    // explorer often carries EIP-55 checksummed casing, while API ids
     // are lowercase. Normalize to the coin's own canonical id so every
     // other s.coins.find(x => x.id === s.tokenId) lookup downstream (view
     // model, URL sync) keeps matching regardless of the casing a link came
@@ -758,20 +746,14 @@ export default function App() {
     try { set({ quoteBalance: await getTokenBalance(chain, quoteAsset, account) }); } catch { set({ quoteBalance: 0n }); }
   }, [set, chain, account]);
 
-  // Pays/receives directly in the token's own real quote asset (native or
-  // ERC20) -- never a hardcoded native amount. Robinhood Chain has no
-  // configured NATIVE_EXTERNAL_ROUTE at all (see chain/addresses.js), so a
-  // "pay with native, auto-converted" convenience simply has nowhere to
-  // source a non-native quote asset from; the direct path below is the only
-  // one that actually works for an ERC20-quoted token today, and it's also
-  // strictly simpler (one hop, no route dependency) for a native-quoted one.
+  // Pays/receives directly in the token's own quote asset (native or ERC20) --
+  // one hop on its curve or pool, never an auto-converted native amount.
   async function buy(coin, amt) {
     if (coin.family === "CAMPAIGN") return flash("This token is a campaign. Use Contribute instead of Buy.");
     if (!amt || amt <= 0) return flash("Enter an amount.");
     const quoteAsset = coin.quoteTokenAddress;
     const isNativeQuote = quoteAsset.toLowerCase() === ZERO_ADDRESS;
-    const decimals = decimalsFor(chain, quoteAsset, [s.platformTokens.incubation, s.platformTokens.launcher, s.platformTokens.raise]);
-    const amountIn = parseUnits(String(amt), decimals);
+    const amountIn = parseUnits(String(amt), coin.quoteDecimals);
     if (isNativeQuote && amountIn > s.nativeBalance) return flash(`Not enough ${chain.nativeSymbol}. Need ${amt}.`);
     const isPool = coin.family === "INSTANT" || (coin.family === "CURVE" && coin.migrated);
     let hash;
@@ -895,7 +877,7 @@ export default function App() {
         const r = await createCurveToken(chain, {
           account: acct, name: d.name.trim(), symbol, supplyTier: d.supplyTier,
           curveBps: 8000n, liquidityBps: 2000n, quoteToken: d.quoteToken, startVirtualQuote, migrationTargetQuote,
-          hookFeeBps: BigInt(d.hookFeeBps), vaultBps: d.vaultBps, metaURI,
+          hookFeeBps: BigInt(d.hookFeeBps), creatorBps: d.creatorBps, vaultBps: d.vaultBps, burnBps: d.burnBps, metaURI,
           buyAmountWei: isNativeQuoted ? earlyBuyAmount : 0n, earlyBuyAmount: isNativeQuoted ? 0n : earlyBuyAmount,
         });
         createdAddress = r.tokenAddress.toLowerCase();
@@ -920,7 +902,7 @@ export default function App() {
       const hash = await runTx("Launch", async () => {
         const r = await launchInstant(chain, {
           account: acct, name: d.name.trim(), symbol, metaURI, quoteToken: d.quoteToken, supplyTier: d.supplyTier,
-          launchMarketCap, quoteAmountWei: buyWei, vaultBps: d.vaultBps, hookFeeBps: BigInt(d.hookFeeBps),
+          launchMarketCap, quoteAmountWei: buyWei, hookFeeBps: BigInt(d.hookFeeBps), creatorBps: d.creatorBps, vaultBps: d.vaultBps, burnBps: d.burnBps,
         });
         createdAddress = r.tokenAddress.toLowerCase();
         return r.hash;
@@ -943,7 +925,7 @@ export default function App() {
       const hash = await runTx("Create campaign", async () => {
         const r = await createCampaign(chain, {
           account: acct, name: d.name.trim(), symbol, metaURI, dexQuoteAsset: d.dexQuoteAsset, goalWei,
-          supplyTier: d.supplyTier, vaultBps: d.vaultBps, hookFeeBps: BigInt(d.hookFeeBps),
+          supplyTier: d.supplyTier, hookFeeBps: BigInt(d.hookFeeBps), creatorBps: d.creatorBps, vaultBps: d.vaultBps, burnBps: d.burnBps,
         });
         createdAddress = r.tokenAddress.toLowerCase(); createdCampaignId = r.campaignId;
         return r.hash;
@@ -982,7 +964,7 @@ export default function App() {
         await createCurveToken(chain, {
           account, name: d.name.trim(), symbol, supplyTier: d.supplyTier,
           curveBps: 8000n, liquidityBps: 2000n, quoteToken: d.quoteToken, startVirtualQuote, migrationTargetQuote,
-          hookFeeBps: BigInt(d.hookFeeBps), vaultBps: d.vaultBps, metaURI,
+          hookFeeBps: BigInt(d.hookFeeBps), creatorBps: d.creatorBps, vaultBps: d.vaultBps, burnBps: d.burnBps, metaURI,
           buyAmountWei: isNativeQuoted ? earlyBuyAmount : 0n, earlyBuyAmount: isNativeQuoted ? 0n : earlyBuyAmount,
           dryRun: true,
         });
@@ -996,7 +978,7 @@ export default function App() {
         const buyWei = d.buyAmountHype && Number(d.buyAmountHype) > 0 ? parseEther(String(d.buyAmountHype)) : 0n;
         await launchInstant(chain, {
           account, name: d.name.trim(), symbol, metaURI, quoteToken: d.quoteToken, supplyTier: d.supplyTier,
-          launchMarketCap, quoteAmountWei: buyWei, vaultBps: d.vaultBps, hookFeeBps: BigInt(d.hookFeeBps),
+          launchMarketCap, quoteAmountWei: buyWei, hookFeeBps: BigInt(d.hookFeeBps), creatorBps: d.creatorBps, vaultBps: d.vaultBps, burnBps: d.burnBps,
           dryRun: true,
         });
       } else {
@@ -1008,7 +990,7 @@ export default function App() {
         const goalWei = await resolveQuoteUnits(chain, d.dexQuoteAsset, d.goalUsd || "1");
         await createCampaign(chain, {
           account, name: d.name.trim(), symbol, metaURI, dexQuoteAsset: d.dexQuoteAsset, goalWei,
-          supplyTier: d.supplyTier, vaultBps: d.vaultBps, hookFeeBps: BigInt(d.hookFeeBps),
+          supplyTier: d.supplyTier, hookFeeBps: BigInt(d.hookFeeBps), creatorBps: d.creatorBps, vaultBps: d.vaultBps, burnBps: d.burnBps,
           dryRun: true,
         });
       }
@@ -1028,7 +1010,7 @@ export default function App() {
     // swap at finalize (see DuckCrowdfund.sol's contribute()) -- so the
     // amount must be parsed at THAT asset's own decimals, not always ether.
     const dexQuoteAsset = coin.quoteTokenAddress || ZERO_ADDRESS;
-    const decimals = decimalsFor(chain, dexQuoteAsset, [s.platformTokens.raise]);
+    const decimals = coin.campaignQuoteDecimals ?? decimalsFor(chain, dexQuoteAsset, [s.platformTokens.raise]);
     const amountWei = parseUnits(String(amt), decimals);
     const hash = await runTx("Contribute", () => contributeCampaign(chain, { account, campaignId: BigInt(coin.campaignOnChainId), amount: amountWei, dexQuoteAsset }));
     if (hash) { await Promise.all([loadPortfolio(), loadCoins()]); flash(`Contributed ${amt} ${coin.quote}`); }
@@ -1045,37 +1027,60 @@ export default function App() {
     const hash = await runTx("Finalize", () => finalizeCampaign(chain, { account, campaignId: BigInt(coin.campaignOnChainId) }));
     if (hash) { await loadCoins(); flash("Finalized."); }
   }
+  // Creator fees accrue on each pool's hook and are claimed per pool
+  // (DuckHookV4.claimFees) -- a token with no pool yet has nothing to claim.
+  function claimTargetFor(tokenAddress) {
+    const t = s.portfolio.created.find((c) => c.id === tokenAddress) || s.coins.find((c) => c.id === tokenAddress);
+    return t?.hasPool && t.poolId ? { poolId: t.poolId, hook: t.hook || chain.DUCK_HOOK } : null;
+  }
   async function claimCreatorFees(tokenAddress) {
-    const hash = await runTx("Claim fees", () => claimFees(chain, { account, token: tokenAddress }));
+    const target = claimTargetFor(tokenAddress);
+    if (!target) return flash("This token has no pool yet, so there are no fees to claim.");
+    const hash = await runTx("Claim fees", () => claimHookFees(chain, { account, ...target }));
     if (hash) { await loadPortfolio(); flash("Fees claimed."); }
   }
+  // One claimFees transaction per pool, each awaited before the next.
   async function claimAllCreatorFees() {
-    const hash = await runTx("Claim all fees", () => claimAllFees(chain, { account }));
-    if (hash) { await loadPortfolio(); flash("All fees claimed."); }
+    const targets = s.portfolio.created.filter((t) => t.hasPool && t.poolId).map((t) => ({ poolId: t.poolId, hook: t.hook || chain.DUCK_HOOK }));
+    if (targets.length === 0) return flash("None of your tokens has a pool yet.");
+    let claimed = 0;
+    for (const target of targets) {
+      const hash = await runTx("Claim fees", () => claimHookFees(chain, { account, ...target }));
+      if (!hash) break;
+      await waitForTx(chain, hash).catch(() => {});
+      claimed++;
+    }
+    if (claimed > 0) { await loadPortfolio(); flash(`Claimed fees on ${claimed} pool${claimed === 1 ? "" : "s"}.`); }
   }
 
   // ---------- creator + liquidity / CTO (lazy-loaded on tab open) ----------
 
   const loadCreatorData = useCallback(async (coin) => {
     if (!coin || coin.family === "CAMPAIGN") return;
+    if (!coin.hasPool || !coin.poolId) {
+      set({ creatorData: { hasPool: false, poolId: null, pool: null, creator: coin.creator, ctoApp: null, hookAccrued: 0n, hookAccruedFailed: false, hookSplits: [], ctoFee: null }, creatorLoading: false });
+      return;
+    }
     set({ creatorLoading: true });
     try {
-      const [position, creator] = await Promise.all([getPosition(chain, coin.id), getPositionCreator(chain, coin.id).catch(() => null)]);
-      const tokenId = position?.[0] ?? 0n;
-      const poolId = position?.[3] ?? null;
-      const hasPool = !!poolId && poolId !== "0x0000000000000000000000000000000000000000000000000000000000000";
-      let pool = null, ctoApp = null, hookAccrued = 0n, hookAccruedFailed = false, hookSplits = [], ctoFee = null;
-      if (hasPool) {
-        let hookAccruedResult;
-        [pool, ctoApp, hookAccruedResult, hookSplits, ctoFee] = await Promise.all([
-          getPool(chain, poolId, coin.hook).catch(() => null), getCtoApplication(chain, poolId, coin.hook).catch(() => null),
-          getHookAccruedFees(chain, poolId, coin.hook).then((v) => ({ ok: true, v })).catch(() => ({ ok: false, v: 0n })),
-          getHookFeeSplits(chain, poolId, coin.hook).catch(() => []), getCtoFee(chain, coin.hook).catch(() => null),
-        ]);
-        hookAccrued = hookAccruedResult.v;
-        hookAccruedFailed = !hookAccruedResult.ok;
-      }
-      set({ creatorData: { hasPool, tokenId, poolId, pool, creator, ctoApp, hookAccrued, hookAccruedFailed, hookSplits, ctoFee }, creatorLoading: false });
+      const poolId = coin.poolId;
+      const hook = coin.hook || chain.DUCK_HOOK;
+      const [poolRaw, ctoRaw, hookAccruedResult, hookSplits, ctoFee] = await Promise.all([
+        getPool(chain, poolId, hook).catch(() => null), getCtoApplication(chain, poolId, hook).catch(() => null),
+        getHookAccruedFees(chain, poolId, hook).then((v) => ({ ok: true, v })).catch(() => ({ ok: false, v: 0n })),
+        getHookFeeSplits(chain, poolId, hook).catch(() => []), getCtoFee(chain, hook).catch(() => null),
+      ]);
+      const pool = poolRaw ? {
+        creator: poolRaw[3], hookFeeBps: Number(poolRaw[6]), creatorBps: Number(poolRaw[7]), vaultBps: Number(poolRaw[8]), burnBps: Number(poolRaw[9]),
+      } : null;
+      const ctoApp = ctoRaw ? { applicant: ctoRaw[0], newCreator: ctoRaw[1], paid: ctoRaw[2] } : null;
+      set({
+        creatorData: {
+          hasPool: true, poolId, pool, creator: pool?.creator ?? coin.creator, ctoApp,
+          hookAccrued: hookAccruedResult.v, hookAccruedFailed: !hookAccruedResult.ok, hookSplits, ctoFee,
+        },
+        creatorLoading: false,
+      });
     } catch (e) {
       console.error("failed to load creator data", e);
       set({ creatorData: null, creatorLoading: false });
@@ -1121,8 +1126,7 @@ export default function App() {
         const quoteAsset = coin.quoteTokenAddress;
         let out = null;
         if (buying) {
-          const decimals = decimalsFor(chain, quoteAsset, [s.platformTokens.incubation, s.platformTokens.launcher, s.platformTokens.raise]);
-          const amountIn = parseUnits(String(amt), decimals);
+          const amountIn = parseUnits(String(amt), coin.quoteDecimals);
           out = isPool
             ? await previewPoolBuyDirect(chain, { token: coin.id, hook: coin.hook, quoteAsset, amountIn })
             : await previewCurveBuy(chain, coin.id, amountIn);
@@ -1141,18 +1145,19 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.screen, s.tokenId, s.side, s.amount, chain]);
 
-  // Triggers DuckLocker.claimFees, which collects the LP-position's trading
-  // fee and (same call, best-effort) the hook's separate creator fee --
-  // but only the hook's fee actually pays the creator. The LP-position fee
-  // itself always goes token-side-burned (0.5%, realized on buys) / quote-
-  // side-to-platform-wallet (0.5%, realized on sells) via DuckLocker.
-  // _collectAndDistribute -- the creator is just the address permitted to
-  // trigger the collection, not a recipient of that side.
+  // DuckHookV4.claimFees on this token's pool: 25% to the platform, 5% into the
+  // token's holder-reward round, the rest split by the pool's creator / vault /
+  // burn setting.
   async function claimCreatorAndHookFees(coin) {
-    const hash = await runTx("Claim fees", () => claimFees(chain, { account, token: coin.id }));
-    if (hash) { await Promise.all([loadPortfolio(), loadCreatorData(coin)]); flash("Fees claimed."); }
+    if (!coin.hasPool || !coin.poolId) return flash("This token has no pool yet.");
+    const hash = await runTx("Claim fees", () => claimHookFees(chain, { account, poolId: coin.poolId, hook: coin.hook || chain.DUCK_HOOK }));
+    if (hash) {
+      await waitForTx(chain, hash).catch(() => {});
+      await Promise.all([loadPortfolio(), loadCreatorData(coin)]);
+      flash("Fees claimed.");
+    }
   }
-  // Separate from the above: DuckIncubation's own 1% curve-trading fee,
+  // Separate from the above: DuckBondingCurve's own curve-trading fee,
   // accrued pre-migration but only claimable once migrated.
   async function claimCurveFeeAction(coin) {
     const hash = await runTx("Claim curve fee", () => claimCurveFee(chain, { account, token: coin.id }));
@@ -1253,7 +1258,7 @@ export default function App() {
           screen, full-width now that there's no sidebar to offset past. */}
       <div style={cs(`position:fixed;left:0;right:0;bottom:0;z-index:55;display:flex;align-items:center;gap:10px;height:44px;padding:0 ${m ? "12px" : "20px"};border-top:1px solid var(--line);background:rgba(23,23,23,.92);backdrop-filter:blur(8px);font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--mute)`)}>
         <span style={cs(`width:6px;height:6px;border-radius:99px;background:${v.health.checkedAt && !v.health.ok ? "var(--neg)" : "var(--lime)"};flex:none`)}></span>
-        <span title={v.health.checkedAt ? `API ${v.health.frontendMs}ms · Subgraph ${v.health.subgraphMs != null ? v.health.subgraphMs + "ms" : "—"}` : "Checking system status…"}>
+        <span title={v.health.checkedAt ? `API ${v.health.frontendMs}ms · Data ${v.health.dataMs != null ? v.health.dataMs + "ms" : "—"}` : "Checking system status…"}>
           {m ? v.chainName.toUpperCase() : v.chainName} {v.chainId}{v.health.frontendMs != null && ` · ${v.health.frontendMs}ms`}
         </span>
         <div style={cs("margin-left:auto;display:flex;gap:6px")}>
@@ -1302,7 +1307,7 @@ export default function App() {
 
 function buildViewModel(ctx) {
   const { s, chain, set, account, isConnected, disconnect, openConnectModal } = ctx;
-  const chainOptions = [{ slug: CHAIN.slug, label: CHAIN.name, go: () => {} }];
+  const chainOptions = CHAIN_LIST.map((opt) => ({ slug: opt.slug, label: opt.name, logoUrl: opt.logoUrl, go: () => ctx.setChain(opt.slug) }));
   const scr = s.screen;
 
   // Just four destinations now (Stats and How-it-works both dropped as
@@ -1335,7 +1340,7 @@ function buildViewModel(ctx) {
     chg: c.chg != null ? (c.chg >= 0 ? "+" : "") + c.chg.toFixed(1) + "%" : "—",
     chgColor: c.chg != null ? (c.chg >= 0 ? "var(--pos)" : "var(--neg)") : "var(--mute)",
     mcap: usdOrQuote(c.mcUsd, c.mc, c.quote), vol: usdOrQuote(c.volUsd, c.vol, c.quote),
-    holders: c.holders.toLocaleString(), quote: c.quote,
+    holders: c.holders.toLocaleString(), quote: c.quote, quoteLogo: logoFor(chain, c.quote),
     socials: c.socials || {},
     verified: !!c.verified,
     bars: buildSparkline(c.rawTrades),
@@ -1410,7 +1415,7 @@ function buildViewModel(ctx) {
       const span = Math.max(...times) - Math.min(...times);
       if (span > 0 && span < bucketSeconds * 5) bucketSeconds = undefined;
     }
-    candles = buildCandles(c.rawTrades || [], c.curveSeed, bucketSeconds);
+    candles = buildCandles(c.rawTrades || [], c.curveSeed, bucketSeconds, c.quoteDecimals);
     if (candles.length > 0) {
       const last = candles[candles.length - 1];
       // pctChange computed from the RAW numbers, before formatting --
@@ -1506,20 +1511,24 @@ function buildViewModel(ctx) {
       headline: c.migrated ? "LP LOCKED FOREVER" : Math.round(c.pct) + "% filled",
       progWidth: Math.min(100, Math.max(0, c.pct)), progFill: INK,
       blurb: c.migrated
-        ? "This token cleared its target. The contract opened a V4 pool, minted a full-range position, and handed it to DuckLocker. It can never be withdrawn."
-        : `Targets are raw ${c.quote} amounts. There's no oracle involved. At the migration target the contract opens a Uniswap V4 pool, mints a full-range position, and hands it to the locker permanently.`,
+        ? "This token cleared its target. The curve contract opened a V4 pool and added full-range liquidity it has no way to remove, so the LP is locked for good."
+        : `Targets are raw ${c.quote} amounts. There's no oracle involved. At the migration target the contract opens a Uniswap V4 pool and adds full-range liquidity that can never be removed.`,
     } : null,
-    liq: c && s.creatorData ? {
-      status: s.creatorData.hasPool ? "LP LOCKED · PERMANENT" : "NO POOL YET",
-      stBg: s.creatorData.hasPool ? LIME : "var(--paper)", stFg: s.creatorData.hasPool ? "var(--on)" : INK,
-      facts: [
-        { k: "POOL", v: c.ticker.replace("$", "") + " / " + c.quote },
-        { k: "POSITION", v: s.creatorData.hasPool ? "#" + s.creatorData.tokenId.toString() : "not minted" },
-        { k: "FEE / TICK", v: "10000 / 200" },
-        { k: "RANGE", v: s.creatorData.hasPool ? "full" : "—" },
-        { k: "VAULT", v: "DuckLocker" },
-      ],
-    } : null,
+    liq: c && s.creatorData ? (() => {
+      const pool = s.creatorData.pool;
+      const pct = (bps) => (bps / 100).toLocaleString(undefined, { maximumFractionDigits: 2 }) + "%";
+      return {
+        status: s.creatorData.hasPool ? "LP LOCKED · PERMANENT" : "NO POOL YET",
+        stBg: s.creatorData.hasPool ? LIME : "var(--paper)", stFg: s.creatorData.hasPool ? "var(--on)" : INK,
+        facts: [
+          { k: "POOL", v: c.ticker.replace("$", "") + " / " + c.quote },
+          { k: "TRADING FEE", v: pool ? pct(pool.hookFeeBps) : "—" },
+          { k: "CREATOR / VAULT / BURN", v: pool ? `${pct(pool.creatorBps)} / ${pct(pool.vaultBps)} / ${pct(pool.burnBps)}` : "—" },
+          { k: "FEE TIER / TICK", v: `${chain.V4_FEE_TIER} / ${chain.V4_TICK_SPACING}` },
+          { k: "RANGE", v: s.creatorData.hasPool ? "full" : "—" },
+        ],
+      };
+    })() : null,
     cto: c && s.creatorData?.hasPool ? {
       status: s.creatorData.ctoApp?.newCreator && s.creatorData.ctoApp.newCreator !== ZERO_ADDRESS ? "PENDING" : "OPEN",
       price: s.creatorData.ctoFee != null ? formatEther(s.creatorData.ctoFee) + " " + chain.nativeSymbol : "…",
@@ -1527,7 +1536,7 @@ function buildViewModel(ctx) {
       applicant: s.creatorData.ctoApp?.applicant && s.creatorData.ctoApp.applicant !== ZERO_ADDRESS ? shortAddress(s.creatorData.ctoApp.applicant) : null,
       blurb: "Anyone can pay the CTO fee to take over the creator fee stream. Post the transaction on X tagging @duckfunfamily for review; the owner approves or rejects from there. Only the fee claim moves, never supply, pool or metadata.",
     } : null,
-    hookAccrued: s.creatorData ? Number(s.creatorData.hookAccrued || 0n) / 1e18 : 0,
+    hookAccrued: s.creatorData ? Number(s.creatorData.hookAccrued || 0n) / 10 ** (c?.quoteDecimals ?? 18) : 0,
     hookAccruedFailed: !!s.creatorData?.hookAccruedFailed,
     hookSplits: s.creatorData?.hookSplits || [],
     // setFeeSplits is contract-gated to the pool's own creator (NotCreator()
@@ -1545,8 +1554,7 @@ function buildViewModel(ctx) {
         if (label === "MAX") {
           if (!buying) return set({ amount: String(myBalanceTokens) });
           if (c && c.quoteTokenAddress?.toLowerCase() !== ZERO_ADDRESS) {
-            const decimals = decimalsFor(chain, c.quoteTokenAddress, [s.platformTokens.incubation, s.platformTokens.launcher, s.platformTokens.raise]);
-            return set({ amount: truncateDecimals(formatUnits(s.quoteBalance, decimals), 4) });
+            return set({ amount: truncateDecimals(formatUnits(s.quoteBalance, c.quoteDecimals), 4) });
           }
           const spendable = s.nativeBalance > GAS_RESERVE_WEI ? s.nativeBalance - GAS_RESERVE_WEI : 0n;
           return set({ amount: truncateDecimals(formatEther(spendable), 4) });
@@ -1557,7 +1565,7 @@ function buildViewModel(ctx) {
     payAsset: buying ? (c ? c.quote : chain.nativeSymbol) : (c ? c.ticker.replace("$", "") : ""),
     payBalance: buying
       ? (c && c.quoteTokenAddress?.toLowerCase() !== ZERO_ADDRESS
-          ? Number(formatUnits(s.quoteBalance, decimalsFor(chain, c.quoteTokenAddress, [s.platformTokens.incubation, s.platformTokens.launcher, s.platformTokens.raise]))).toFixed(4)
+          ? Number(formatUnits(s.quoteBalance, c.quoteDecimals)).toFixed(4)
           : Number(formatEther(s.nativeBalance)).toFixed(4))
       : myBalanceTokens.toLocaleString(undefined, { maximumFractionDigits: 2 }),
     submitTx: () => (!account ? (openConnectModal && openConnectModal()) : buying ? ctx.buy(c, amt) : ctx.sell(c, amt)),
@@ -1566,7 +1574,7 @@ function buildViewModel(ctx) {
     previewLoading: s.previewLoading,
     previewText: (() => {
       if (!c || s.previewOut == null) return null;
-      const decimals = buying ? 18 : decimalsFor(chain, c.quoteTokenAddress, [s.platformTokens.incubation, s.platformTokens.launcher, s.platformTokens.raise]);
+      const decimals = buying ? 18 : c.quoteDecimals;
       const symbol = buying ? c.ticker.replace("$", "") : c.quote;
       const val = Number(formatUnits(s.previewOut, decimals));
       return "~" + val.toLocaleString(undefined, { maximumFractionDigits: val < 1 ? 6 : 4 }) + " " + symbol;
@@ -1610,13 +1618,12 @@ function buildViewModel(ctx) {
       if (s.raiseDefaults) return;
       getRaiseDefaults(chain).then((d) => set({ raiseDefaults: d })).catch(() => {});
     },
-    quoteOptions: quoteOptionsFor(chain, s.family === "launcher" ? chain.LAUNCHER_QUOTE_TOKENS : chain.INCUBATION_QUOTE_TOKENS, s.platformTokens[s.family === "launcher" ? "launcher" : "incubation"]),
-    raiseQuoteOptions: quoteOptionsFor(chain, chain.RAISE_QUOTE_TOKENS, s.platformTokens.raise),
-    // Native currency ("") always has a route by definition; a platform
-    // token isn't in LIQUID_QUOTE_TOKEN_SYMBOLS either, so it correctly
-    // falls to false too until this platform actually wires a route for
-    // its own token.
-    quoteHasEthRoute: (label) => label === chain.nativeSymbol || chain.LIQUID_QUOTE_TOKEN_SYMBOLS.includes(label),
+    quoteOptions: quoteOptionsFor(chain, s.platformTokens[s.family === "launcher" ? "launcher" : "incubation"]),
+    raiseQuoteOptions: quoteOptionsFor(chain, s.platformTokens.raise),
+    // Native ETH needs no route, and every curated quote token has native swap
+    // routes configured on all three families; a platform token or an arbitrary
+    // launcher quote token has none.
+    quoteHasEthRoute: (label) => label === chain.nativeSymbol || chain.ROUTED_QUOTE_SYMBOLS.includes(label),
     createCta: !account ? "Connect wallet to launch" : s.txPending ? "Confirming…" : "Launch",
     submitCreate: ctx.submitCreate,
     simulating: s.simulating, simulateCreate: ctx.simulateCreate,
@@ -1659,14 +1666,14 @@ function buildViewModel(ctx) {
 }
 
 // Shown right after a launch tx confirms, for the few seconds before the
-// subgraph indexes the new token/campaign and it shows up in s.coins --
+// backend picks up the new token/campaign and it shows up in s.coins --
 // TokenPage/CampaignPage both render null until then, which would otherwise
 // be a blank screen.
 function PendingLaunchPanel({ v }) {
   return (
     <div style={cs("border:1px solid var(--line);background:var(--card);padding:40px 24px;text-align:center")}>
       <div style={cs("font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.1em;color:var(--mute)")}>CONFIRMING YOUR LAUNCH</div>
-      <div style={cs("font-size:15px;margin-top:10px")}>This'll appear here as soon as it's indexed, usually just a few seconds.</div>
+      <div style={cs("font-size:15px;margin-top:10px")}>This'll appear here as soon as it's confirmed, usually just a few seconds.</div>
       <button onClick={v.goHome} style={cs("margin-top:18px;padding:10px 20px;border:1px solid var(--line);background:var(--paper);color:var(--ink);font-size:13px;font-weight:600;cursor:pointer")}>Back to Discover</button>
     </div>
   );
@@ -1677,9 +1684,7 @@ function buildCampaignModel(chain, c, s, myContribution) {
   // Contributions land directly in the campaign's own quote asset (native
   // or an ERC20 -- see DuckCrowdfund.sol's contribute()), never swapped, so
   // this must decimal-normalize against THAT asset, not assume native/1e18.
-  const quoteDecimals = c.quoteTokenAddress && c.quoteTokenAddress.toLowerCase() !== "0x0000000000000000000000000000000000000000"
-    ? (chain.DEFAULT_QUOTE_TOKENS.find((t) => t.address.toLowerCase() === c.quoteTokenAddress.toLowerCase())?.decimals ?? 18)
-    : 18;
+  const quoteDecimals = c.campaignQuoteDecimals ?? c.quoteDecimals ?? 18;
   const quoteSymbol = c.quote || chain.nativeSymbol;
   const goal = Number(c.campaignGoal || 0) / 10 ** quoteDecimals;
   const raised = Number(c.campaignRaised || 0) / 10 ** quoteDecimals;
@@ -1734,7 +1739,7 @@ function buildCampaignModel(chain, c, s, myContribution) {
     contribAsset: quoteSymbol, contribBalance,
     progWidth: Math.min(100, Math.max(0, pct)), progFill: c.campaignFailed ? ORANGE : INK,
     note: c.campaignSucceeded
-      ? "Raise complete. The escrowed supply is released, so you can claim your pro-rata allocation. The V4 pool is seeded and LP is locked in DuckLocker."
+      ? "Raise complete. The escrowed supply is released, so you can claim your pro-rata allocation. The V4 pool is seeded with liquidity that can never be removed."
       : c.campaignFailed
       ? "The goal was not cleared, so no pool was seeded and the escrowed supply was never released. Contributions are refundable in full."
       : "Tokens are already deployed but held by the raise contract. Nothing is transferable or tradeable until the raise completes.",
@@ -1758,7 +1763,7 @@ function buildCampaignModel(chain, c, s, myContribution) {
       }, new Map()).values()
     ).map((ct) => {
       // Same address-labeling treatment TokenPage's Trades/Holders already
-      // get (Creator, DuckCrowdfund, DuckLocker, Burned, Liquidity Pool,
+      // get (Creator, DuckCrowdfund, Burned, Liquidity Pool,
       // etc.) -- a contributor CAN be the campaign's own creator, or (post-
       // success, once claims/refunds route through it) the contract itself.
       const label = labelFor(chain, ct.contributor, { [c.creator?.toLowerCase()]: "Creator" });
@@ -1787,7 +1792,7 @@ function buildCampaignModel(chain, c, s, myContribution) {
   };
 }
 
-// explorerUrl is null when the chain has none yet (Arc, today) -- the
+// explorerUrl is null when the chain has no explorer configured -- the
 // modal hides the "Explorer" link entirely in that case rather than
 // pointing it at a guessed or nonexistent URL.
 function buildTxModel(chain, s, account) {

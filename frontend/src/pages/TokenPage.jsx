@@ -10,11 +10,10 @@ import LendingTab from "./LendingTab.jsx";
 // buying (native or a curated ERC20, see App.jsx's buy()), the token itself
 // when selling -- shown as a real logo+symbol pill instead of plain text,
 // the same visual language CreateFormPage's quote-asset chips already use.
-// logoFor() always returns something (a verified per-token logo, or
-// Robinhood Chain's own logo as an honest fallback), so there's no separate
-// blank-placeholder case to render here anymore.
-function PayPill({ symbol, imageUrl }) {
-  const logo = imageUrl || logoFor(symbol);
+// logoFor() always returns something (a verified per-token logo, or the
+// chain's own logo as an honest fallback).
+function PayPill({ chain, symbol, imageUrl }) {
+  const logo = imageUrl || logoFor(chain, symbol);
   return (
     <span style={cs("display:flex;align-items:center;gap:6px;margin:6px 6px 6px 0;padding:5px 10px 5px 6px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:700;flex:none;white-space:nowrap")}>
       <img src={logo} alt="" style={cs("width:18px;height:18px;border-radius:999px;object-fit:cover;flex:none")} />
@@ -78,7 +77,7 @@ function TradePanel({ v, sel, tok }) {
         <div style={cs("display:flex;align-items:stretch;border:1px solid var(--line);border-radius:9px;background:var(--paper);overflow:hidden")}>
           <input value={v.amount} onChange={v.onAmount} style={cs("flex:1;min-width:0;border:0;outline:0;background:transparent;font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:500;letter-spacing:-.03em;padding:13px 14px")} />
           <div style={cs("display:flex;align-items:center;border-left:1px solid var(--line);padding-left:8px")}>
-            <PayPill symbol={v.payAsset} imageUrl={v.buying ? null : sel.imageUrl} />
+            <PayPill chain={v.chain} symbol={v.payAsset} imageUrl={v.buying ? null : sel.imageUrl} />
           </div>
         </div>
         <div style={cs("display:flex;margin-top:10px;border:1px solid var(--line);border-radius:8px;overflow:hidden")}>
@@ -101,7 +100,7 @@ function TradePanel({ v, sel, tok }) {
         </div>
         <div style={cs("display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--mute);margin-top:12px")}><span>YOUR BALANCE</span><span style={cs("color:var(--ink)")}>{v.myBalanceTokens.toLocaleString(undefined, { maximumFractionDigits: 2 })} {sel.symbol.replace("$", "")}</span></div>
         <button onClick={v.submitTx} disabled={v.txPending} style={cs(`width:100%;padding:16px;margin-top:14px;border:1px solid var(--line);border-radius:9px;background:${v.ctaBg};color:${v.ctaFg};font-size:16px;font-weight:700;letter-spacing:-.01em;cursor:pointer`)}>{v.ctaLabel}</button>
-        <div style={cs("font-size:11.5px;color:var(--mute);margin-top:12px")}>{tok.family === "CURVE" && !tok.migrated ? "Trades against the bonding curve." : "Routes through Uniswap V4."}</div>
+        <div style={cs("font-size:11.5px;color:var(--mute);margin-top:12px")}>{tok.family === "CURVE" && !tok.migrated ? "Trades against the bonding curve." : `Routes through Uniswap V4 on ${v.chainName}.`}</div>
       </div>
     </div>
   );
@@ -122,8 +121,8 @@ export default function TokenPage({ v }) {
   const [commentPage, setCommentPage] = useState(1);
   useEffect(() => { setTradePage(1); setHolderPage(1); setCommentPage(1); }, [tok?.id]);
   if (!sel || !tok) return null;
-  // null when the selected chain has no verified explorer yet (Arc, today)
-  // -- callers render a plain span instead of a link in that case.
+  // null when the selected chain has no explorer configured -- callers
+  // render a plain span instead of a link in that case.
   const explorerAddr = (addr) => (v.chain.blockExplorerUrl ? `${v.chain.blockExplorerUrl}/address/${addr}` : null);
 
   const pageSize = v.pageSize;
@@ -173,7 +172,7 @@ export default function TokenPage({ v }) {
               <span style={cs(`font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;padding:2px 8px;border-radius:999px;border:1px solid var(--line);background:${sel.famBg};color:${sel.famFg};flex:none;white-space:nowrap`)}>{sel.family}</span>
               {sel.quote && (
                 <span style={cs("display:flex;align-items:center;gap:4px;padding:2px 8px 2px 3px;border-radius:999px;border:1px solid var(--line);background:var(--paper);flex:none;white-space:nowrap")}>
-                  <img src={logoFor(sel.quote)} alt="" style={cs("width:14px;height:14px;border-radius:999px;object-fit:cover;flex:none")} />
+                  <img src={logoFor(v.chain, sel.quote)} alt="" style={cs("width:14px;height:14px;border-radius:999px;object-fit:cover;flex:none")} />
                   <span style={cs("font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:var(--mute)")}>{sel.quote}</span>
                 </span>
               )}
@@ -243,9 +242,8 @@ export default function TokenPage({ v }) {
               // this hash), so its chart is strictly more capable here than
               // ours (order flow, liquidity, multi-venue context). Curve-
               // phase tokens have no pool yet -- nothing for DEXTools to
-              // show -- so they keep our own chart below instead. DEXTools
-              // has no confirmed Arc coverage, so Arc always keeps our own
-              // chart too, even once a real pool exists there.
+              // show -- so they keep our own chart below instead, as does
+              // Robinhood Chain, which DEXTools doesn't cover.
               <iframe
                 key={tok.poolId}
                 title={`${sel.symbol} chart on DEXTools`}
@@ -337,7 +335,7 @@ export default function TokenPage({ v }) {
 
             {v.tabHolders && (
               <div>
-                {tok.holderRows.length === 0 && <div style={cs("padding:24px 18px;font-size:13px;color:var(--mute)")}>No holders indexed yet.</div>}
+                {tok.holderRows.length === 0 && <div style={cs("padding:24px 18px;font-size:13px;color:var(--mute)")}>No holders yet.</div>}
                 {v.isMobile ? (
                   tok.holderRows.map((h, i) => (
                     <div key={i} style={cs("display:flex;flex-direction:column;gap:6px;padding:12px 16px;border-bottom:1px solid var(--soft);font-family:'JetBrains Mono',monospace;font-size:12.5px")}>
@@ -417,23 +415,24 @@ export default function TokenPage({ v }) {
                           </div>
                         ))}
                       </div>
-                      <div style={cs("font-size:12px;color:var(--mute);margin-top:10px")}>Full-range and permanent. Only accrued fees are ever claimable.</div>
+                      <div style={cs("font-size:12px;color:var(--mute);margin-top:10px")}>Full-range liquidity added by the launch contract, which has no way to remove it. There is no LP fee; the trading fee above is the only one.</div>
                     </div>
 
                     <div style={cs("padding:16px;border-bottom:1px solid var(--line)")}>
                       <div style={cs("font-size:17px;font-weight:700;letter-spacing:-.03em;margin-bottom:14px")}>Creator fees</div>
                       <div style={cs("display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;align-items:start")}>
                         <div style={cs("border:1px solid var(--line);border-radius:10px;background:var(--lime);color:var(--on);box-shadow:var(--sh);padding:18px")}>
-                          <div style={cs("font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;color:var(--acc)")}>CREATOR FEE ACCRUED (YOURS)</div>
+                          <div style={cs("font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;color:var(--acc)")}>TRADING FEES ACCRUED ON THIS POOL</div>
                           <div style={cs("font-family:'JetBrains Mono',monospace;font-size:32px;font-weight:500;letter-spacing:-.04em;margin:7px 0 3px")}>{v.hookAccruedFailed ? "—" : v.hookAccrued.toFixed(5) + " " + sel.quote}</div>
                           {v.hookAccruedFailed && <div style={cs("font-family:'JetBrains Mono',monospace;font-size:11.5px;margin-bottom:16px")}>Couldn't read this from the chain. Try reopening this tab.</div>}
-                          <button onClick={v.claimCreatorAndHookFees} disabled={v.txPending} style={cs("width:100%;padding:13px;border:1px solid var(--line);border-radius:9px;background:var(--ink);color:var(--card);font-size:14px;font-weight:700;cursor:pointer")}>Claim your creator fee</button>
+                          {!v.hookAccruedFailed && <div style={cs("font-size:11.5px;line-height:1.5;margin-bottom:14px")}>On claim: 25% platform, 5% to holders, the rest split by this pool's creator / vault / burn setting. Anyone can trigger it.</div>}
+                          <button onClick={v.claimCreatorAndHookFees} disabled={v.txPending} style={cs("width:100%;padding:13px;border:1px solid var(--line);border-radius:9px;background:var(--ink);color:var(--card);font-size:14px;font-weight:700;cursor:pointer")}>Claim fees</button>
                         </div>
                         {tok.family === "CURVE" && (
                           <div style={cs("border:1px solid var(--line);border-radius:10px;background:var(--card)")} >
                             <div style={cs("padding:18px")}>
-                            <div style={cs("font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;color:var(--mute)")}>CURVE TRADING FEE (1%)</div>
-                            <div style={cs("font-size:12.5px;color:var(--mute);margin:9px 0 16px;line-height:1.5")}>{tok.migrated ? "Accrued during the curve phase, split 50/50 creator/platform." : "Claimable only after migration."}</div>
+                            <div style={cs("font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;color:var(--mute)")}>CURVE TRADING FEE</div>
+                            <div style={cs("font-size:12.5px;color:var(--mute);margin:9px 0 16px;line-height:1.5")}>{tok.migrated ? "Accrued during the curve phase, split between creator and platform." : "Claimable only after migration."}</div>
                             <button onClick={v.claimCurveFeeAction} disabled={v.txPending || !tok.migrated} style={cs(`width:100%;padding:13px;border:1px solid var(--line);border-radius:9px;background:${tok.migrated ? "var(--card)" : "var(--paper)"};color:var(--ink);font-size:14px;font-weight:700;cursor:pointer`)}>Claim curve fee</button>
                             </div>
                           </div>
@@ -463,7 +462,7 @@ export default function TokenPage({ v }) {
                               </div>
                               <div style={cs("padding:0 16px 16px")}>
                                 <button onClick={submitSplits} disabled={v.txPending} style={cs("padding:12px 20px;border:1px solid var(--line);border-radius:8px;background:var(--card);font-size:13.5px;font-weight:600;cursor:pointer")}>Save fee settings</button>
-                                <div style={cs("font-size:12px;color:var(--mute);margin-top:12px;line-height:1.55;max-width:76ch")}>Leave blank to reset to 100% direct to the creator. Only routes the sell-fee skim, not the LP-position fee.</div>
+                                <div style={cs("font-size:12px;color:var(--mute);margin-top:12px;line-height:1.55;max-width:76ch")}>Leave blank to reset to 100% direct to the creator. Only routes the creator's share of claimed fees; the vault and burn shares are fixed at launch.</div>
                               </div>
                             </>
                           )

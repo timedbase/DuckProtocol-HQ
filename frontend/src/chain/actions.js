@@ -2,26 +2,22 @@ import { getPublicClient } from "./client.js";
 import { mineVanitySalt } from "./vanity.js";
 import { simulateAndSend, simulateAndSendWithResult } from "./tx.js";
 import {
-  DUCK_BONDING_CURVE_ABI, DUCK_LAUNCHER_ABI, DUCK_CROWDFUND_ABI, DUCK_LOCKER_ABI, DUCK_HOOK_ABI, DUCK_TOKEN_ABI,
+  DUCK_BONDING_CURVE_ABI, DUCK_LAUNCHER_ABI, DUCK_CROWDFUND_ABI, DUCK_HOOK_ABI, DUCK_TOKEN_ABI,
   DUCK_VAULT_ABI, DUCK_TOKEN_GOVERNOR_ABI,
 } from "./abis.js";
 import { keccak256, toBytes } from "viem";
 import { ZERO_ADDRESS } from "./addresses.js";
 
-// Every function here takes the resolved CHAINS[slug] config (see
-// chain/addresses.js) as its first `chain` param, resolved once by the
-// caller from the app's currently-selected chain -- same pattern as
+// Every function here takes the resolved CHAINS[slug] config (see chain/addresses.js) as its first
+// `chain` param, resolved once by the caller from the app's selected chain -- same pattern as
 // chain/dex.js and chain/quotes.js.
 
 export async function waitForTx(chain, hash) {
   return getPublicClient(chain).waitForTransactionReceipt({ hash });
 }
 
-// Each family's platformToken() is independently owner-settable and starts
-// at address(0) (unset). When set, fee-waived trading/creation routes
-// through it -- see DuckRaise.launch's feeWaived check for one example.
-// Fetched live rather than hardcoded since it can change and has no event
-// to index. Returns null per family when unset.
+// Each family's platformToken() is independently owner-settable and starts unset. Fetched live
+// since it can change and has no event to index. Returns null per family when unset.
 export async function getPlatformTokens(chain) {
   const publicClient = getPublicClient(chain);
   const [incubation, launcher, raise] = await publicClient.multicall({
@@ -59,39 +55,33 @@ export async function getPlatformTokens(chain) {
   return { incubation: withMeta(tokens.incubation), launcher: withMeta(tokens.launcher), raise: withMeta(tokens.raise) };
 }
 
-// ---------- DuckIncubation (bonding curve family) ----------
+// Fee settings shared by all three create calls:
+//   hookFeeBps -- the pool's trading fee, one of 200/400/600/800/1000 (0 = the hook's 2% default);
+//   creatorBps + vaultBps + burnBps -- how the creator's share of that fee is divided (creator wallet
+//   / this token's lending vault / buy-and-burn), summing to 10000. Fixed at creation.
+
+// ---------- DuckBondingCurve ----------
 
 export async function getCurveCreationFee(chain) {
   return getPublicClient(chain).readContract({ address: chain.DUCK_BONDING_CURVE, abi: DUCK_BONDING_CURVE_ABI, functionName: "creationFee" });
 }
 
-// quoteToken = ZERO_ADDRESS for native currency, or one of the whitelisted
-// ERC20s. buyAmountWei: only meaningful for a native-quoted token -- any
-// value sent above the creation fee is swept into an immediate buy in the
-// same transaction (see DuckIncubation._collectCreationFee/createToken), no
-// separate call needed and no sandwich risk since the curve doesn't exist
-// until this same tx creates it.
-// earlyBuyAmount: for an ERC20-quoted token instead -- the amount to
-// early-buy with, pulled via transferFrom in the same call. Requires the
-// token already approved to chain.DUCK_BONDING_CURVE for at least this amount.
-// supplyTier: index 0-6 into the shared SupplyTiers menu (1B/10B/100B/1T/
-// 10T/100T/1Q) -- see chain/addresses.js's SUPPLY_TIERS. There is no
-// free-form totalSupply anymore.
-// vaultBps: 0/1000/5000/10000 = 100/0, 90/10, 50/50, 0/100 creator/vault
-// split of this token's fee revenue -- see chain/addresses.js's
-// VAULT_BPS_OPTIONS. Immutable after creation.
+// quoteToken = ZERO_ADDRESS for native ETH, or an allowed ERC20.
+// buyAmountWei: native-quoted only -- value sent above the creation fee is swept into an immediate
+// buy in the same transaction.
+// earlyBuyAmount: ERC20-quoted only -- pulled via transferFrom in the same call, so the token is
+// approved to the curve first.
+// supplyTier: index 0-6 into SUPPLY_TIERS.
 export async function createCurveToken(chain, {
   account, name, symbol, supplyTier = 0, curveBps, liquidityBps, quoteToken = ZERO_ADDRESS,
-  startVirtualQuote, migrationTargetQuote, hookFeeBps = 0n, vaultBps = 0,
+  startVirtualQuote, migrationTargetQuote, hookFeeBps = 0n, creatorBps = 10000, vaultBps = 0, burnBps = 0,
   metaURI, buyAmountWei = 0n, earlyBuyAmount = 0n, dryRun = false,
 }) {
   const { userSalt } = mineVanitySalt({ deployer: chain.DUCK_BONDING_CURVE, impl: chain.DUCK_TOKEN_IMPL, caller: account });
   const fee = await getCurveCreationFee(chain);
-  const isNativeQuoted = quoteToken.toLowerCase() === ZERO_ADDRESS.toLowerCase();
+  const isNativeQuoted = quoteToken.toLowerCase() === ZERO_ADDRESS;
 
-  // A dry run must never send a real transaction -- including the ERC20
-  // approve() an early buy would otherwise need. simulateContract below
-  // still proves the createToken call itself would succeed either way.
+  // A dry run never sends a transaction -- including the approve() an ERC20 early buy needs.
   if (!dryRun && !isNativeQuoted && earlyBuyAmount > 0n) {
     await approveToken(chain, { account, token: quoteToken, spender: chain.DUCK_BONDING_CURVE, amount: earlyBuyAmount });
   }
@@ -104,7 +94,7 @@ export async function createCurveToken(chain, {
       name, symbol, supplyTier, curveBps, liquidityBps, quoteToken,
       startVirtualQuote, migrationTargetQuote,
       earlyBuyAmount: isNativeQuoted ? 0n : earlyBuyAmount,
-      hookFeeBps, vaultBps,
+      hookFeeBps, creatorBps, vaultBps, burnBps,
       metaURI: metaURI || "", salt: userSalt,
     }],
     value: isNativeQuoted ? fee + buyAmountWei : fee,
@@ -116,7 +106,7 @@ export async function createCurveToken(chain, {
 
 export async function buyCurve(chain, { account, token, quoteToken = ZERO_ADDRESS, amountIn, minOut = 0n, deadlineSeconds = 1800 }) {
   const deadline = BigInt(Math.floor(Date.now() / 1000) + deadlineSeconds);
-  const isNativeQuoted = quoteToken.toLowerCase() === ZERO_ADDRESS.toLowerCase();
+  const isNativeQuoted = quoteToken.toLowerCase() === ZERO_ADDRESS;
 
   if (!isNativeQuoted) {
     await ensureAllowance(chain, { account, token: quoteToken, spender: chain.DUCK_BONDING_CURVE, amount: amountIn });
@@ -130,12 +120,8 @@ export async function buyCurve(chain, { account, token, quoteToken = ZERO_ADDRES
   });
 }
 
-// Lets a buyer who only holds native currency still buy into an
-// ERC20-quoted curve token -- the incoming value is atomically routed into
-// the quote asset first (see DuckIncubation.buyWithNative / setRoutes), then
-// bought. Only works for quote tokens with a real configured route
-// (Ink's USDC/USDT0 by default -- the only two with real Ink liquidity
-// today; Arc has none seeded yet).
+// Buys an ERC20-quoted curve token with native ETH: the value is routed into the quote asset through
+// the curve's configured routes (RouteTables.sol) first, then bought.
 export async function buyCurveWithNative(chain, { account, token, amountInWei, minQuoteOut = 0n, minOut = 0n, deadlineSeconds = 1800 }) {
   const deadline = BigInt(Math.floor(Date.now() / 1000) + deadlineSeconds);
   return simulateAndSend(chain, {
@@ -165,38 +151,21 @@ export async function isQuoteTokenAllowed(chain, token) {
   return getPublicClient(chain).readContract({ address: chain.DUCK_BONDING_CURVE, abi: DUCK_BONDING_CURVE_ABI, functionName: "quoteTokenAllowed", args: [token] });
 }
 
-// ---------- DuckLauncher (instant DEX-launch family) ----------
+// ---------- DuckLauncher ----------
 
 export async function getLaunchFee(chain) {
   return getPublicClient(chain).readContract({ address: chain.DUCK_LAUNCHER, abi: DUCK_LAUNCHER_ABI, functionName: "launchFee" });
 }
 
-// launchMarketCap: creator-chosen virtual FDV, in the quote token's own raw
-// units (e.g. wei for native, 6-decimal units for USDC).
-// quoteAmountWei: an optional same-tx instant buy -- native currency, routed
-// into the quote asset first if it isn't native itself (same
-// buyWithNative-style routing as the curve; only works for Ink's USDC/USDT0
-// by default).
-// dex: "v4" (default) or "v3" -- DuckLauncherArc-only (registered via
-// addDexV3; chain.V3_POSITION_MANAGER is null everywhere else). The
-// contract dispatches V4-vs-V3 setup purely off which positionManager was
-// passed (it's the key into the launcher's own dexes mapping, which already
-// knows isV3 from how that entry was registered) -- no other param differs.
-// Callers must enforce V3's two hard constraints themselves before calling:
-// quoteToken can't be native (NativeNotSupportedOnV3) and hookFeeBps must be
-// 0 (HookFeeNotSupportedOnV3) -- see CreateFormPage's dex selector.
-// supplyTier/vaultBps: see createCurveToken's comment above -- same shared
-// menus, same meaning, every family.
-// quoteToken can be ANY address here, curated or not -- DuckLauncher has no
-// on-chain allow-list check at launch time (unlike curve/crowdfund below),
-// so the create form doesn't need to restrict this to the curated list
-// either; it's offered as suggestions only.
+// launchMarketCap: the virtual FDV the pool is seeded at, in the quote token's raw units.
+// quoteAmountWei: optional same-tx instant buy in native ETH, routed into the quote asset first if it
+// isn't native (only works for quote tokens with configured routes).
+// quoteToken can be any address -- launch() has no allow-list check.
 export async function launchInstant(chain, {
   account, name, symbol, metaURI, quoteToken = ZERO_ADDRESS, supplyTier = 0, launchMarketCap,
-  minQuoteOut = 0n, minTokensOut = 0n, hookFeeBps = 0n, vaultBps = 0, revertOnInstantBuyFailure = false, quoteAmountWei = 0n,
-  dryRun = false,
+  minQuoteOut = 0n, minTokensOut = 0n, hookFeeBps = 0n, creatorBps = 10000, vaultBps = 0, burnBps = 0,
+  revertOnInstantBuyFailure = false, quoteAmountWei = 0n, dryRun = false,
 }) {
-  const positionManager = chain.V4_POSITION_MANAGER;
   const { userSalt } = mineVanitySalt({ deployer: chain.DUCK_LAUNCHER, impl: chain.DUCK_TOKEN_IMPL, caller: account });
   const fee = await getLaunchFee(chain);
   const { hash, result } = await simulateAndSendWithResult(chain, {
@@ -204,48 +173,44 @@ export async function launchInstant(chain, {
     abi: DUCK_LAUNCHER_ABI,
     functionName: "launch",
     args: [{
-      name, symbol, metaURI: metaURI || "", feeWallet: account, positionManager,
-      quoteToken, vanitySalt: userSalt, supplyTier, launchMarketCap, minQuoteOut, minTokensOut, hookFeeBps, vaultBps, revertOnInstantBuyFailure,
+      name, symbol, metaURI: metaURI || "", feeWallet: account, positionManager: chain.V4_POSITION_MANAGER,
+      quoteToken, vanitySalt: userSalt, supplyTier, launchMarketCap, minQuoteOut, minTokensOut,
+      hookFeeBps, creatorBps, vaultBps, burnBps, revertOnInstantBuyFailure,
     }],
     value: fee + quoteAmountWei,
     account,
     dryRun,
   });
-  return { hash, tokenAddress: result?.[0] };
+  return { hash, tokenAddress: result?.[0], poolId: result?.[1] };
 }
 
 export async function isLauncherQuoteTokenAllowed(chain, token) {
   return getPublicClient(chain).readContract({ address: chain.DUCK_LAUNCHER, abi: DUCK_LAUNCHER_ABI, functionName: "quoteTokens", args: [token] });
 }
 
-// ---------- DuckRaise (crowdfund-campaign family) ----------
+// ---------- DuckCrowdfund ----------
 
 export async function getCampaignFee(chain) {
   return getPublicClient(chain).readContract({ address: chain.DUCK_CROWDFUND, abi: DUCK_CROWDFUND_ABI, functionName: "campaignFee" });
 }
 
-// Global, owner-configured -- not a per-campaign creator choice, so the
-// create form shows these read-only rather than as editable inputs.
+// Global, owner-configured -- shown read-only on the create form.
 export async function getRaiseDefaults(chain) {
-  const publicClient = getPublicClient(chain);
-  const [duration, contributorBps, lpBps, campaignFee] = await Promise.all([
-    publicClient.readContract({ address: chain.DUCK_CROWDFUND, abi: DUCK_CROWDFUND_ABI, functionName: "campaignDuration" }),
-    publicClient.readContract({ address: chain.DUCK_CROWDFUND, abi: DUCK_CROWDFUND_ABI, functionName: "contributorBps" }),
-    publicClient.readContract({ address: chain.DUCK_CROWDFUND, abi: DUCK_CROWDFUND_ABI, functionName: "lpBps" }),
-    publicClient.readContract({ address: chain.DUCK_CROWDFUND, abi: DUCK_CROWDFUND_ABI, functionName: "campaignFee" }),
-  ]);
+  const [duration, contributorBps, lpBps, campaignFee] = await getPublicClient(chain).multicall({
+    contracts: ["campaignDuration", "contributorBps", "lpBps", "campaignFee"].map((functionName) => ({
+      address: chain.DUCK_CROWDFUND, abi: DUCK_CROWDFUND_ABI, functionName,
+    })),
+    allowFailure: false,
+  });
   return { duration, contributorBps, lpBps, campaignFee };
 }
 
-// goalWei: creator-specified soft floor, denominated in whatever
-// dexQuoteAsset actually is -- native wei if dexQuoteAsset is address(0),
-// that asset's own raw units otherwise. Contributions land directly in this
-// asset (see contributeCampaign below) -- there is no swap at finalize
-// anymore (the sandwich-attack surface a raise-then-swap design would have
-// -- see DuckCrowdfund.sol's contribute()), so goal and dexQuoteAsset must
-// be picked together, not independently.
-// supplyTier/vaultBps: same shared menus as every other family.
-export async function createCampaign(chain, { account, name, symbol, metaURI, dexQuoteAsset = ZERO_ADDRESS, goalWei, startTimeSeconds, hookFeeBps = 0n, vaultBps = 0, supplyTier = 0, dryRun = false }) {
+// goalWei: the soft floor, in dexQuoteAsset's raw units. Contributions land directly in that asset
+// and are never swapped, so goal and asset are chosen together.
+export async function createCampaign(chain, {
+  account, name, symbol, metaURI, dexQuoteAsset = ZERO_ADDRESS, goalWei, startTimeSeconds,
+  hookFeeBps = 0n, creatorBps = 10000, vaultBps = 0, burnBps = 0, supplyTier = 0, dryRun = false,
+}) {
   const { userSalt } = mineVanitySalt({ deployer: chain.DUCK_CROWDFUND, impl: chain.DUCK_TOKEN_IMPL, caller: account });
   const fee = await getCampaignFee(chain);
   const startTime = BigInt(startTimeSeconds ?? Math.floor(Date.now() / 1000));
@@ -253,7 +218,7 @@ export async function createCampaign(chain, { account, name, symbol, metaURI, de
     address: chain.DUCK_CROWDFUND,
     abi: DUCK_CROWDFUND_ABI,
     functionName: "launch",
-    args: [name, symbol, metaURI || "", dexQuoteAsset, goalWei, startTime, userSalt, hookFeeBps, vaultBps, supplyTier],
+    args: [name, symbol, metaURI || "", dexQuoteAsset, goalWei, startTime, userSalt, hookFeeBps, creatorBps, vaultBps, burnBps, supplyTier],
     value: fee,
     account,
     dryRun,
@@ -261,12 +226,9 @@ export async function createCampaign(chain, { account, name, symbol, metaURI, de
   return { hash, campaignId: result?.[0], tokenAddress: result?.[1] };
 }
 
-// dexQuoteAsset: the campaign's own chosen quote asset (read off
-// getCampaignCore) -- native currency is sent as msg.value; any other asset
-// is pulled directly via transferFrom, requiring an allowance first (same
-// two-mode branching as buyCurve above).
+// Native campaigns take msg.value; ERC20 campaigns pull via transferFrom after an allowance.
 export async function contributeCampaign(chain, { account, campaignId, amount, dexQuoteAsset = ZERO_ADDRESS }) {
-  const isNativeQuoted = dexQuoteAsset.toLowerCase() === ZERO_ADDRESS.toLowerCase();
+  const isNativeQuoted = dexQuoteAsset.toLowerCase() === ZERO_ADDRESS;
   if (!isNativeQuoted) {
     await ensureAllowance(chain, { account, token: dexQuoteAsset, spender: chain.DUCK_CROWDFUND, amount });
   }
@@ -290,15 +252,14 @@ export async function finalizeCampaign(chain, { account, campaignId }) {
   return simulateAndSend(chain, { address: chain.DUCK_CROWDFUND, abi: DUCK_CROWDFUND_ABI, functionName: "finalize", args: [campaignId], account });
 }
 
-// `campaigns` is a private array on-chain now (its auto-generated getter hit
-// a stack-too-deep compile limit at 18 fields -- see DuckCrowdfund.sol's own
-// comment) -- split into two smaller getters instead of one wide one.
+// `campaigns` is private on-chain; its data is split across two getters.
 export async function getCampaign(chain, campaignId) {
-  const publicClient = getPublicClient(chain);
-  const [core, meta] = await Promise.all([
-    publicClient.readContract({ address: chain.DUCK_CROWDFUND, abi: DUCK_CROWDFUND_ABI, functionName: "getCampaignCore", args: [campaignId] }),
-    publicClient.readContract({ address: chain.DUCK_CROWDFUND, abi: DUCK_CROWDFUND_ABI, functionName: "getCampaignMeta", args: [campaignId] }),
-  ]);
+  const [core, meta] = await getPublicClient(chain).multicall({
+    contracts: ["getCampaignCore", "getCampaignMeta"].map((functionName) => ({
+      address: chain.DUCK_CROWDFUND, abi: DUCK_CROWDFUND_ABI, functionName, args: [campaignId],
+    })),
+    allowFailure: false,
+  });
   const [creator, dexQuoteAsset, goal, startTime, deadline, totalRaised, finalized, succeeded, token] = core;
   const [name, symbol, metaURI, vanitySalt, contributorBps, lpBps, hookFeeBps, vaultBps, totalSupply] = meta;
   return { creator, dexQuoteAsset, goal, startTime, deadline, totalRaised, finalized, succeeded, token, name, symbol, metaURI, vanitySalt, contributorBps, lpBps, hookFeeBps, vaultBps, totalSupply };
@@ -308,33 +269,13 @@ export async function isRaiseQuoteAssetAllowed(chain, token) {
   return getPublicClient(chain).readContract({ address: chain.DUCK_CROWDFUND, abi: DUCK_CROWDFUND_ABI, functionName: "quoteAssetAllowed", args: [token] });
 }
 
-// ---------- DuckLocker (shared LP-fee claiming, all three families) ----------
-
-export async function claimFees(chain, { account, token }) {
-  return simulateAndSend(chain, { address: chain.DUCK_LOCKER, abi: DUCK_LOCKER_ABI, functionName: "claimFees", args: [token], account });
-}
-
-export async function claimAllFees(chain, { account }) {
-  return simulateAndSend(chain, { address: chain.DUCK_LOCKER, abi: DUCK_LOCKER_ABI, functionName: "claimAllFees", args: [], account });
-}
-
-export async function getPosition(chain, token) {
-  return getPublicClient(chain).readContract({ address: chain.DUCK_LOCKER, abi: DUCK_LOCKER_ABI, functionName: "positions", args: [token] });
-}
-
-export async function getPositionCreator(chain, token) {
-  return getPublicClient(chain).readContract({ address: chain.DUCK_LOCKER, abi: DUCK_LOCKER_ABI, functionName: "creatorOf", args: [token] });
-}
-
-// ---------- DuckHookV4 (shared sell-fee skim + CTO, all three families) ----------
+// ---------- DuckHookV4 (trading fee, fee claims, CTO) ----------
 //
-// `hook` defaults to the chain's own original DuckHookV4 for back-compat,
-// but every real caller should pass the pool's OWN hook address (coin.hook,
-// indexed by the subgraph per-token) -- a pool's hook is fixed forever at
-// creation, and once a second hook exists on that chain, a token registered
-// against it would silently no-op (or revert) against the wrong hook
-// contract otherwise.
+// Every call takes the pool's OWN hook (coin.hook, indexed per token) -- a pool's hook is fixed in
+// its PoolKey forever. `hook` defaults to the chain's current hook only as a fallback.
 
+// pools(poolId) -> [token, quoteCurrency, tokenIsCurrency0, creator, launchTimestamp, registered,
+// hookFeeBps, creatorBps, vaultBps, burnBps]
 export async function getPool(chain, poolId, hook = chain.DUCK_HOOK) {
   return getPublicClient(chain).readContract({ address: hook, abi: DUCK_HOOK_ABI, functionName: "pools", args: [poolId] });
 }
@@ -347,6 +288,7 @@ export async function getHookAccruedFees(chain, poolId, hook = chain.DUCK_HOOK) 
   return getPublicClient(chain).readContract({ address: hook, abi: DUCK_HOOK_ABI, functionName: "accruedFees", args: [poolId] });
 }
 
+// -> [applicant, newCreator, paid]
 export async function getCtoApplication(chain, poolId, hook = chain.DUCK_HOOK) {
   return getPublicClient(chain).readContract({ address: hook, abi: DUCK_HOOK_ABI, functionName: "ctoApplications", args: [poolId] });
 }
@@ -358,20 +300,14 @@ export async function applyForCTO(chain, { account, poolId, newCreator, hook = c
   });
 }
 
-export async function approveCTO(chain, { account, poolId, hook = chain.DUCK_HOOK }) {
-  return simulateAndSend(chain, { address: hook, abi: DUCK_HOOK_ABI, functionName: "approveCTO", args: [poolId], account });
-}
-
-export async function rejectCTO(chain, { account, poolId, hook = chain.DUCK_HOOK }) {
-  return simulateAndSend(chain, { address: hook, abi: DUCK_HOOK_ABI, functionName: "rejectCTO", args: [poolId], account });
-}
-
+// Permissionless. Pays out the pool's accrued fee: 25% platform (24% when someone other than the
+// creator calls it, who receives the remaining 1%), 5% into the token's holder-reward round, and the
+// rest split creator / vault / buy-and-burn.
 export async function claimHookFees(chain, { account, poolId, hook = chain.DUCK_HOOK }) {
   return simulateAndSend(chain, { address: hook, abi: DUCK_HOOK_ABI, functionName: "claimFees", args: [poolId], account });
 }
 
-// splits: [{ wallet, bps }, ...] -- bps must sum to 10000 (or be empty to
-// reset to "creator receives it all directly").
+// splits: [{ wallet, bps }, ...] summing to 10000, or empty to pay the creator directly.
 export async function setHookFeeSplits(chain, { account, poolId, splits, hook = chain.DUCK_HOOK }) {
   return simulateAndSend(chain, { address: hook, abi: DUCK_HOOK_ABI, functionName: "setFeeSplits", args: [poolId, splits], account });
 }
@@ -380,7 +316,7 @@ export async function getHookFeeSplits(chain, poolId, hook = chain.DUCK_HOOK) {
   return getPublicClient(chain).readContract({ address: hook, abi: DUCK_HOOK_ABI, functionName: "getFeeSplits", args: [poolId] });
 }
 
-// ---------- ERC20 (approve/allowance/balance for any launched or quote token) ----------
+// ---------- ERC20 ----------
 
 export async function ensureAllowance(chain, { account, token, spender, amount }) {
   const allowance = await getPublicClient(chain).readContract({
@@ -404,14 +340,9 @@ export async function getNativeBalance(chain, account) {
 }
 
 // ---------- DuckVault (per-token lending market) ----------
-// Every amount here is already in the relevant asset's own raw on-chain
-// units (currency's own decimals for borrow/repay, the launched token's 18
-// decimals for collateral) -- callers (LendingTab.jsx) do the decimal
-// conversion, same division of responsibility as buyCurve/sellCurve above.
-// currency is always a real ERC20 (WETH, never native, even for a
-// native-quoted pool -- see docs/index.html's Lending page) so repay/
-// addCollateral always go through the same approve+pull path, no
-// native-value special case.
+// Amounts are already in raw units (the vault currency's decimals for borrow/repay, the launched
+// token's 18 for collateral); LendingTab.jsx does the conversion. The vault currency is always an
+// ERC20 (WETH for a native-quoted pool), so repay/addCollateral always approve and pull.
 
 export async function borrowFromVault(chain, { account, vault, amount }) {
   return simulateAndSend(chain, { address: vault, abi: DUCK_VAULT_ABI, functionName: "borrow", args: [amount], account });
@@ -435,9 +366,8 @@ export async function getVaultHealthFactor(chain, vault, borrower) {
   return getPublicClient(chain).readContract({ address: vault, abi: DUCK_VAULT_ABI, functionName: "healthFactorBps", args: [borrower] });
 }
 
-// ---------- DuckTokenGovernor (per-token, lazily cloned on first proposal) ----------
-// support: 0 = Against, 1 = For, 2 = Abstain (OZ Governor's fixed
-// GovernorCountingSimple convention).
+// ---------- DuckTokenGovernor (per-token, cloned on first proposal) ----------
+// support: 0 = Against, 1 = For, 2 = Abstain.
 
 export async function castVote(chain, { account, governor, proposalId, support }) {
   return simulateAndSend(chain, { address: governor, abi: DUCK_TOKEN_GOVERNOR_ABI, functionName: "castVote", args: [BigInt(proposalId), support], account });
@@ -447,12 +377,8 @@ export async function castVoteWithReason(chain, { account, governor, proposalId,
   return simulateAndSend(chain, { address: governor, abi: DUCK_TOKEN_GOVERNOR_ABI, functionName: "castVoteWithReason", args: [BigInt(proposalId), support, reason || ""], account });
 }
 
-// targets/values/calldatas come straight from the subgraph's Proposal
-// entity (indexed off the real ProposalCreated event, never reconstructed
-// by hand) -- descriptionHash must match EXACTLY what propose() hashed
-// (keccak256 of the raw description string) or execute() reverts with a
-// proposal-id mismatch, same OZ Governor convention this whole stack
-// already follows.
+// targets/values/calldatas come straight from the indexed Proposal; descriptionHash must be
+// keccak256 of the exact description propose() hashed or execute() reverts.
 export async function executeProposal(chain, { account, governor, targets, values, calldatas, description }) {
   const descriptionHash = keccak256(toBytes(description || ""));
   return simulateAndSend(chain, {

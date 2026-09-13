@@ -1,24 +1,24 @@
-// Talks to the backend in ../../backend (a thin API in front of the
-// Goldsky subgraph + live contract reads, see its README). Always hits the
-// real network -- there is no demo/canned-data mode anymore. Defaults to
-// the real deployed DuckProtocol backend so a deployment with no
-// VITE_API_URL set (e.g. a missing Vercel env var) still works instead of
-// silently falling back to an unreachable localhost; VITE_API_URL still
-// overrides this for local backend development.
-import { CHAIN } from "./chain/addresses.js";
+// Talks to the backend in ../../backend (indexed chain data plus live contract reads, see its
+// README). Defaults to the deployed backend; VITE_API_URL overrides it
+// for local development.
+import { ZERO_ADDRESS } from "./chain/addresses.js";
 
 export const API_BASE = import.meta.env.VITE_API_URL || "https://api.duckfun.family";
 
-function buildQuoteSymbols(chain) {
-  const table = Object.fromEntries(chain.DEFAULT_QUOTE_TOKENS.map((t) => [t.address.toLowerCase(), t.symbol]));
-  table["0x0000000000000000000000000000000000000000"] = chain.nativeSymbol;
+const quoteSymbolTables = new Map();
+function quoteSymbolTable(chain) {
+  let table = quoteSymbolTables.get(chain.slug);
+  if (!table) {
+    table = Object.fromEntries(chain.DEFAULT_QUOTE_TOKENS.map((t) => [t.address.toLowerCase(), t.symbol]));
+    table[ZERO_ADDRESS] = chain.nativeSymbol;
+    quoteSymbolTables.set(chain.slug, table);
+  }
   return table;
 }
-const QUOTE_SYMBOLS = buildQuoteSymbols(CHAIN);
 
-export function quoteSymbol(_chain, address) {
+export function quoteSymbol(chain, address) {
   if (!address) return "?";
-  return QUOTE_SYMBOLS[address.toLowerCase()] || (address.slice(0, 6) + "…");
+  return quoteSymbolTable(chain)[address.toLowerCase()] || (address.slice(0, 6) + "…");
 }
 
 export function shortAddress(address) {
@@ -45,43 +45,37 @@ async function postJSON(path, body) {
   return res.json();
 }
 
-// Single chain now (Robinhood only) -- `chain` is still accepted and
-// threaded through by every call site (matching every other chain-aware
-// function in this app), just no longer used to pick a URL prefix.
-const PREFIX = `/${CHAIN.slug}`;
+// Every data route is chain-scoped under /<slug> (robinhood or ink).
+const p = (chain) => `/${chain.slug}`;
 
 export const api = {
-  tokens: (_chain, params = "") => getJSON(`${PREFIX}/tokens` + params),
-  token: (_chain, address) => getJSON(`${PREFIX}/tokens/${address}`),
-  trades: (_chain, address, limit = 50, offset = 0) => getJSON(`${PREFIX}/tokens/${address}/trades?limit=${limit}&offset=${offset}`),
-  holders: (_chain, address, limit = 50, offset = 0) => getJSON(`${PREFIX}/tokens/${address}/holders?limit=${limit}&offset=${offset}`),
-  comments: (_chain, address, limit = 50, offset = 0) => getJSON(`${PREFIX}/tokens/${address}/comments?limit=${limit}&offset=${offset}`),
-  postComment: (_chain, address, wallet, body) => postJSON(`${PREFIX}/tokens/${address}/comments`, { wallet, body }),
+  tokens: (chain, params = "") => getJSON(`${p(chain)}/tokens` + params),
+  token: (chain, address) => getJSON(`${p(chain)}/tokens/${address}`),
+  trades: (chain, address, limit = 50, offset = 0) => getJSON(`${p(chain)}/tokens/${address}/trades?limit=${limit}&offset=${offset}`),
+  holders: (chain, address, limit = 50, offset = 0) => getJSON(`${p(chain)}/tokens/${address}/holders?limit=${limit}&offset=${offset}`),
+  comments: (chain, address, limit = 50, offset = 0) => getJSON(`${p(chain)}/tokens/${address}/comments?limit=${limit}&offset=${offset}`),
+  postComment: (chain, address, wallet, body) => postJSON(`${p(chain)}/tokens/${address}/comments`, { wallet, body }),
   health: () => getJSON("/health"),
-  campaigns: (_chain) => getJSON(`${PREFIX}/campaigns`),
-  campaign: (_chain, id) => getJSON(`${PREFIX}/campaigns/${id}`),
-  portfolio: (_chain, address) => getJSON(`${PREFIX}/portfolio/${address}`),
-  quoteTokens: (_chain, family = "curve") => getJSON(`${PREFIX}/quote-tokens?family=${family}`),
-  // Batched current USD price per quote-token address -- for the create
-  // form's live "≈ $X" preview. Not authoritative; see convertUsdToQuoteUnits.
-  quotePrices: (_chain, addresses) => getJSON(`${PREFIX}/price?tokens=${addresses.join(",")}`),
-  // The authoritative "how many raw quote-token units is this USD amount"
-  // conversion -- called once at actual submit/simulate time, never per
-  // keystroke. Returns null (never throws) when the quote asset can't be
-  // priced right now, so callers can surface a clear "try a different
-  // quote asset" message instead of silently submitting a wrong amount.
-  convertUsdToQuoteUnits: (_chain, quoteToken, usd) => postJSON(`${PREFIX}/price/convert`, { quoteToken, usd }).catch(() => null),
-  locker: (_chain) => getJSON(`${PREFIX}/locker`),
-  hook: (_chain) => getJSON(`${PREFIX}/hook`),
-  curve: (_chain) => getJSON(`${PREFIX}/curve`),
-  launcher: (_chain) => getJSON(`${PREFIX}/launcher`),
-  crowdfund: (_chain) => getJSON(`${PREFIX}/crowdfund`),
-  vaultFactory: (_chain) => getJSON(`${PREFIX}/vault-factory`),
-  vaultConfig: (_chain) => getJSON(`${PREFIX}/vault-config`),
-  governorFactory: (_chain) => getJSON(`${PREFIX}/governor-factory`),
-  vaults: (_chain) => getJSON(`${PREFIX}/vaults`),
-  vault: (_chain, tokenAddress) => getJSON(`${PREFIX}/vaults/${tokenAddress}`),
-  proposals: (_chain, tokenAddress) => getJSON(`${PREFIX}/governance/proposals${tokenAddress ? `?token=${tokenAddress}` : ""}`),
-  proposal: (_chain, id) => getJSON(`${PREFIX}/governance/proposals/${id}`),
-  stats: (_chain) => getJSON(`${PREFIX}/stats`),
+  campaigns: (chain) => getJSON(`${p(chain)}/campaigns`),
+  campaign: (chain, id) => getJSON(`${p(chain)}/campaigns/${id}`),
+  portfolio: (chain, address) => getJSON(`${p(chain)}/portfolio/${address}`),
+  quoteTokens: (chain, family = "curve") => getJSON(`${p(chain)}/quote-tokens?family=${family}`),
+  // Batched current USD price per quote-token address (the backend's reference prices) -- for the create
+  // form's live "≈ X" preview. Not authoritative; see convertUsdToQuoteUnits.
+  quotePrices: (chain, addresses) => getJSON(`${p(chain)}/price?tokens=${addresses.join(",")}`),
+  // The authoritative USD -> raw quote-units conversion, called once at submit/simulate time.
+  // Resolves to null (never throws) when the quote asset can't be priced right now.
+  convertUsdToQuoteUnits: (chain, quoteToken, usd) => postJSON(`${p(chain)}/price/convert`, { quoteToken, usd }).catch(() => null),
+  hook: (chain) => getJSON(`${p(chain)}/hook`),
+  curve: (chain) => getJSON(`${p(chain)}/curve`),
+  launcher: (chain) => getJSON(`${p(chain)}/launcher`),
+  crowdfund: (chain) => getJSON(`${p(chain)}/crowdfund`),
+  vaultFactory: (chain) => getJSON(`${p(chain)}/vault-factory`),
+  vaultConfig: (chain) => getJSON(`${p(chain)}/vault-config`),
+  governorFactory: (chain) => getJSON(`${p(chain)}/governor-factory`),
+  vaults: (chain) => getJSON(`${p(chain)}/vaults`),
+  vault: (chain, tokenAddress) => getJSON(`${p(chain)}/vaults/${tokenAddress}`),
+  proposals: (chain, tokenAddress) => getJSON(`${p(chain)}/governance/proposals${tokenAddress ? `?token=${tokenAddress}` : ""}`),
+  proposal: (chain, id) => getJSON(`${p(chain)}/governance/proposals/${id}`),
+  stats: (chain) => getJSON(`${p(chain)}/stats`),
 };

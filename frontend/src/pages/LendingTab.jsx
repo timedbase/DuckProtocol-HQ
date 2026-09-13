@@ -3,7 +3,6 @@ import { parseUnits } from "viem";
 import { cs } from "../cs.js";
 import { compactNumber } from "../adapters.js";
 
-const VAULT_BPS_LABEL = { 0: "100% creator / 0% vault", 1000: "90% creator / 10% vault", 5000: "50% creator / 50% vault", 10000: "0% creator / 100% vault" };
 
 // This token's own lending vault -- one per token, cloned at creation time
 // (see lending/DuckVaultFactory.sol) and funded entirely by a creator-
@@ -29,7 +28,7 @@ export default function LendingTab({ v }) {
     { k: "TOTAL RESERVES", v: mkt.currencySymbol ? compactNumber(reserves) + " " + mkt.currencySymbol : "—" },
     { k: "TOTAL BORROWED", v: mkt.currencySymbol ? compactNumber(borrows) + " " + mkt.currencySymbol : "—" },
     { k: "UTILIZATION", v: mkt.enabled ? (mkt.utilizationBps / 100).toFixed(1) + "%" : "—" },
-    { k: "CREATOR / VAULT SPLIT", v: VAULT_BPS_LABEL[mkt.vaultBps] || "—" },
+    { k: "CREATOR / VAULT / BURN", v: mkt.vaultBps != null ? `${mkt.creatorBps / 100}% / ${mkt.vaultBps / 100}% / ${mkt.burnBps / 100}%` : "—" },
   ];
 
   const riskFacts = cfg ? [
